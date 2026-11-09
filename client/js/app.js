@@ -320,17 +320,29 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   window.networkClient.on('move_result', (data) => {
-    // Execute incoming move animation
-    renderer.enqueueSteps(data.steps, () => {
-      // Update board state
+    // Execute incoming move animation wave-by-wave
+    const waves = data.waves || data.steps || [];
+    renderer.enqueueWaves(waves, data.board, () => {
+      // Update board state & player eliminations
       engine.board = data.board;
+      if (data.newlyEliminated && data.newlyEliminated.length > 0) {
+        data.newlyEliminated.forEach(elimId => {
+          const p = engine.players.find(pl => pl.id === elimId);
+          if (p) {
+            p.isEliminated = true;
+            showToast(`${p.name} eliminated!`);
+          }
+        });
+      }
+
       if (data.isGameOver) {
         showGameOver(data.winner);
       } else {
-        const nextPlayer = engine.players.find(p => p.id === data.nextPlayerId);
-        if (nextPlayer) {
-          const surviving = engine.getActivePlayers();
-          engine.currentTurnIndex = surviving.findIndex(p => p.id === nextPlayer.id);
+        if (data.nextPlayerId) {
+          const nextIdx = engine.players.findIndex(p => p.id === data.nextPlayerId);
+          if (nextIdx !== -1) {
+            engine.currentPlayerIndex = nextIdx;
+          }
         }
         updateHud();
         startTurnTimer(20);
@@ -474,13 +486,20 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function executeLocalMove(r, c) {
+    if (!engine || engine.isGameOver || renderer.animating) return;
     const result = engine.makeMove(r, c);
     if (!result) {
       window.soundManager.play('beep', { pitch: 0.5 });
       return;
     }
 
-    renderer.enqueueSteps(result.steps, () => {
+    if (result.newlyEliminated && result.newlyEliminated.length > 0) {
+      result.newlyEliminated.forEach(p => {
+        showToast(`${p.name} eliminated!`);
+      });
+    }
+
+    renderer.enqueueWaves(result.waves, result.board, () => {
       if (result.isGameOver) {
         showGameOver(result.winner);
       } else {

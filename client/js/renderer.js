@@ -1,7 +1,7 @@
 /**
  * Chain Reaction Canvas 60FPS Renderer
  * Renders glowing grid, spinning 3D-shaded orbs, explosion particle bursts,
- * and projectile orbs with motion blur.
+ * and projectile orbs with wave-by-wave visual synchronization.
  */
 
 class CanvasRenderer {
@@ -9,12 +9,14 @@ class CanvasRenderer {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.engine = null;
-    this.animationQueue = [];
+    this.displayBoard = [];
+    this.waveQueue = [];
     this.activeProjectiles = [];
     this.particles = [];
     this.rotations = {}; // cellKey -> current angle
     this.animating = false;
     this.onMoveComplete = null;
+    this.finalBoard = null;
 
     this.cellWidth = 0;
     this.cellHeight = 0;
@@ -24,22 +26,36 @@ class CanvasRenderer {
 
     this.lastTime = performance.now();
     this.colorMap = {};
-    for (const p of window.PLAYER_PALETTE) {
+    const palette = (typeof window !== 'undefined' && window.PLAYER_PALETTE) ? window.PLAYER_PALETTE : [];
+    for (const p of palette) {
       this.colorMap[p.id] = p;
     }
 
     this.initCanvasSize();
-    window.addEventListener('resize', () => this.initCanvasSize());
+    if (typeof window !== 'undefined') {
+      window.addEventListener('resize', () => this.initCanvasSize());
+    }
     this.startLoop();
   }
 
   setEngine(engine) {
     this.engine = engine;
+    this.displayBoard = [];
+    if (engine && engine.board) {
+      this.syncBoard(engine.board);
+    }
     this.rotations = {};
     this.activeProjectiles = [];
     this.particles = [];
-    this.animationQueue = [];
+    this.waveQueue = [];
+    this.animating = false;
+    this.finalBoard = null;
     this.initCanvasSize();
+  }
+
+  syncBoard(board) {
+    if (!board) return;
+    this.displayBoard = board.map(row => row.map(cell => ({ ...cell })));
   }
 
   initCanvasSize() {
@@ -50,7 +66,6 @@ class CanvasRenderer {
     const rect = parent.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
 
-    // Use available width and height
     const w = rect.width;
     const h = rect.height;
 
@@ -77,7 +92,6 @@ class CanvasRenderer {
     const cellByW = maxW / cols;
     const cellByH = maxH / rows;
 
-    // Maintain square cells
     const cellSize = Math.min(cellByW, cellByH);
     this.cellWidth = cellSize;
     this.cellHeight = cellSize;
@@ -128,59 +142,109 @@ class CanvasRenderer {
     requestAnimationFrame(loop);
   }
 
-  enqueueSteps(steps, onComplete = null) {
+  /**
+   * Enqueue waves of animations
+   * @param {Array} waves Array of wave objects from engine
+   * @param {Array} finalBoard Final authoritative board state
+   * @param {Function} onComplete Callback after all waves finish
+   */
+  enqueueWaves(waves, finalBoard = null, onComplete = null) {
+    this.waveQueue = waves ? JSON.parse(JSON.stringify(waves)) : [];
+    this.finalBoard = finalBoard;
     this.onMoveComplete = onComplete;
-    this.animationQueue = [...steps];
     this.animating = true;
-    this.processNextStep();
+    this.activeProjectiles = [];
+    this.processNextWave();
   }
 
-  processNextStep() {
-    if (this.animationQueue.length === 0) {
-      if (this.activeProjectiles.length === 0) {
-        this.animating = false;
-        if (this.onMoveComplete) {
-          const cb = this.onMoveComplete;
-          this.onMoveComplete = null;
-          cb();
-        }
+  /**
+   * Backwards compatibility helper
+   */
+  enqueueSteps(steps, onComplete = null) {
+    if (steps && steps.length > 0 && steps[0].waveNumber !== undefined) {
+      this.enqueueWaves(steps, this.engine ? this.engine.board : null, onComplete);
+    } else {
+      // Direct completion fallback
+      if (this.engine) this.syncBoard(this.engine.board);
+      if (onComplete) onComplete();
+    }
+  }
+
+  processNextWave() {
+    if (this.waveQueue.length === 0) {
+      if (this.finalBoard) {
+        this.syncBoard(this.finalBoard);
+      } else if (this.engine) {
+        this.syncBoard(this.engine.board);
+      }
+      this.animating = false;
+      if (this.onMoveComplete) {
+        const cb = this.onMoveComplete;
+        this.onMoveComplete = null;
+        cb();
       }
       return;
     }
 
-    // Process a batch of steps (or sequential explosion wave)
-    const step = this.animationQueue.shift();
+    const wave = this.waveQueue.shift();
 
-    if (step.type === 'place') {
-      window.soundManager.play('click');
-      window.soundManager.vibrate(20);
-      // Brief pause then next
-      setTimeout(() => this.processNextStep(), 60);
-    } else if (step.type === 'explode') {
-      window.soundManager.play('pop');
-      window.soundManager.vibrate(35);
-      this.createExplosionParticles(step.r, step.c, step.owner);
-      // Wait tiny fraction then fire next
-      setTimeout(() => this.processNextStep(), 40);
-    } else if (step.type === 'fly_orb') {
-      const fromPos = this.getCellCoordinates(step.fromR, step.fromC);
-      const toPos = this.getCellCoordinates(step.toR, step.toC);
+    if (wave.type === 'placement') {
+      // Wave 0: Initial placement on display board
+      if (this.displayBoard[wave.row] && this.displayBoard[wave.row][wave.col]) {
+        this.displayBoard[wave.row][wave.col].count = wave.count;
+        this.displayBoard[wave.row][wave.col].owner = wave.owner;
+      }
+      if (window.soundManager) {
+        window.soundManager.play('click');
+        window.soundManager.vibrate(20);
+      }
 
-      this.activeProjectiles.push({
-        fromX: fromPos.x,
-        fromY: fromPos.y,
-        toX: toPos.x,
-        toY: toPos.y,
-        progress: 0,
-        speed: 5.5, // completes in ~0.18s
-        owner: step.owner,
-        targetR: step.toR,
-        targetC: step.toC,
-        targetCount: step.count
-      });
+      // If explosions follow, slight delay so player can register the placement
+      const delay = (this.waveQueue.length > 0) ? 120 : 30;
+      setTimeout(() => this.processNextWave(), delay);
 
-      // Continue queue
-      setTimeout(() => this.processNextStep(), 25);
+    } else if (wave.type === 'explosion_wave') {
+      if (window.soundManager) {
+        window.soundManager.play('pop');
+        window.soundManager.vibrate(35);
+      }
+
+      // Phase 1: Exploding cells shed orbs & trigger burst
+      if (wave.explosions) {
+        for (const exp of wave.explosions) {
+          if (this.displayBoard[exp.r] && this.displayBoard[exp.r][exp.c]) {
+            this.displayBoard[exp.r][exp.c].count = exp.remainingCount;
+            this.displayBoard[exp.r][exp.c].owner = exp.owner;
+          }
+          this.createExplosionParticles(exp.r, exp.c, exp.owner);
+        }
+      }
+
+      // Phase 2: Launch projectiles into neighbor cells
+      this.activeProjectiles = [];
+      if (wave.impacts && wave.impacts.length > 0) {
+        for (const imp of wave.impacts) {
+          const fromPos = this.getCellCoordinates(imp.fromR, imp.fromC);
+          const toPos = this.getCellCoordinates(imp.toR, imp.toC);
+
+          this.activeProjectiles.push({
+            fromX: fromPos.x,
+            fromY: fromPos.y,
+            toX: toPos.x,
+            toY: toPos.y,
+            progress: 0,
+            speed: 5.5, // Completes in ~0.18s
+            owner: imp.newOwner,
+            targetR: imp.toR,
+            targetC: imp.toC,
+            newCount: imp.newCount,
+            newOwner: imp.newOwner
+          });
+        }
+      } else {
+        // No impacts in this wave, advance immediately
+        setTimeout(() => this.processNextWave(), 40);
+      }
     }
   }
 
@@ -191,7 +255,7 @@ class CanvasRenderer {
 
     for (let i = 0; i < count; i++) {
       const angle = (Math.PI * 2 * i) / count + (Math.random() * 0.4);
-      const speed = 60 + Math.random() * 120;
+      const speed = 70 + Math.random() * 130;
       this.particles.push({
         x: pos.x,
         y: pos.y,
@@ -205,28 +269,52 @@ class CanvasRenderer {
     }
   }
 
+  createLandingParticles(r, c, ownerId) {
+    const pos = this.getCellCoordinates(r, c);
+    const color = this.getPlayerColor(ownerId);
+    const count = 4;
+
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 25 + Math.random() * 40;
+      this.particles.push({
+        x: pos.x,
+        y: pos.y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        life: 0.6,
+        decay: 3.5,
+        radius: 1.5 + Math.random() * 2,
+        color: color.light || color.hex
+      });
+    }
+  }
+
   getPlayerColor(ownerId) {
+    if (this.colorMap[ownerId]) {
+      return this.colorMap[ownerId];
+    }
     if (this.engine) {
       const player = this.engine.players.find(p => p.id === ownerId);
       if (player && this.colorMap[player.colorId]) {
         return this.colorMap[player.colorId];
       }
     }
-    return this.colorMap[0] || window.PLAYER_PALETTE[0];
+    return this.colorMap[0] || (window.PLAYER_PALETTE ? window.PLAYER_PALETTE[0] : { hex: '#f44336', glow: 'rgba(244,67,54,0.7)' });
   }
 
   update(dt) {
     // 1. Update Cell Orb Rotations
-    if (this.engine) {
-      const { rows, cols } = this.engine;
+    if (this.displayBoard && this.displayBoard.length > 0) {
+      const rows = this.displayBoard.length;
+      const cols = this.displayBoard[0].length;
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           const key = `${r}_${c}`;
           if (!this.rotations[key]) {
             this.rotations[key] = Math.random() * Math.PI * 2;
           }
-          const cell = this.engine.board[r][c];
-          // Critical mass vibration multiplier: rotates faster when near explosion!
+          const cell = this.displayBoard[r][c];
           const isCritical = (cell.count === cell.maxOrbs - 1);
           const speed = isCritical ? 4.5 : (1.2 + (cell.count * 0.6));
           this.rotations[key] += speed * dt;
@@ -235,20 +323,30 @@ class CanvasRenderer {
     }
 
     // 2. Update Active Projectiles
-    for (let i = this.activeProjectiles.length - 1; i >= 0; i--) {
-      const p = this.activeProjectiles[i];
-      p.progress += p.speed * dt;
-      if (p.progress >= 1.0) {
-        // Projectile arrived!
-        this.activeProjectiles.splice(i, 1);
-        if (this.animationQueue.length === 0 && this.activeProjectiles.length === 0 && this.animating) {
-          this.animating = false;
-          if (this.onMoveComplete) {
-            const cb = this.onMoveComplete;
-            this.onMoveComplete = null;
-            cb();
+    if (this.activeProjectiles.length > 0) {
+      let allFinished = true;
+      for (const p of this.activeProjectiles) {
+        p.progress += p.speed * dt;
+        if (p.progress >= 1.0) {
+          p.progress = 1.0;
+          if (!p.landed) {
+            p.landed = true;
+            // Update destination cell on displayBoard
+            if (this.displayBoard[p.targetR] && this.displayBoard[p.targetR][p.targetC]) {
+              this.displayBoard[p.targetR][p.targetC].count = p.newCount;
+              this.displayBoard[p.targetR][p.targetC].owner = p.newOwner;
+            }
+            this.createLandingParticles(p.targetR, p.targetC, p.newOwner);
           }
+        } else {
+          allFinished = false;
         }
+      }
+
+      if (allFinished) {
+        this.activeProjectiles = [];
+        // Slight pause between waves to appreciate impact
+        setTimeout(() => this.processNextWave(), 45);
       }
     }
 
@@ -268,20 +366,20 @@ class CanvasRenderer {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.displayWidth, this.displayHeight);
 
-    if (!this.engine) return;
+    if (!this.engine || !this.displayBoard || this.displayBoard.length === 0) return;
 
     const { rows, cols } = this.engine;
     const current = this.engine.getCurrentPlayer();
     const currentColor = current ? (this.colorMap[current.colorId] || window.PLAYER_PALETTE[0]) : window.PLAYER_PALETTE[0];
 
-    // 1. Draw Grid Lines with current player's tinted neon glow
+    // 1. Draw Grid Lines with current player's neon glow
     this.renderGrid(rows, cols, currentColor);
 
-    // 2. Draw Orbs inside cells
+    // 2. Draw Orbs inside cells (using displayBoard)
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
-        const cell = this.engine.board[r][c];
-        if (cell.count > 0 && cell.owner !== null) {
+        const cell = this.displayBoard[r][c];
+        if (cell && cell.count > 0 && cell.owner !== null) {
           const pos = this.getCellCoordinates(r, c);
           const color = this.getPlayerColor(cell.owner);
           const rotKey = `${r}_${c}`;
@@ -342,8 +440,8 @@ class CanvasRenderer {
     ctx.fillRect(startX, startY, totalW, totalH);
 
     // Glowing outer border tinted with current player's color
-    ctx.strokeStyle = currentColor.hex;
-    ctx.shadowColor = currentColor.glow;
+    ctx.strokeStyle = currentColor ? currentColor.hex : '#4caf50';
+    ctx.shadowColor = currentColor ? currentColor.glow : 'rgba(76,175,80,0.6)';
     ctx.shadowBlur = 12;
     ctx.lineWidth = 2.5;
     ctx.strokeRect(startX, startY, totalW, totalH);
@@ -424,7 +522,6 @@ class CanvasRenderer {
     ctx.shadowBlur = radius * 0.8;
 
     // 3D Spherical Radial Gradient
-    // Light source offset to top-left
     const grad = ctx.createRadialGradient(
       x - radius * 0.32,
       y - radius * 0.32,
@@ -447,4 +544,6 @@ class CanvasRenderer {
   }
 }
 
-window.CanvasRenderer = CanvasRenderer;
+if (typeof window !== 'undefined') {
+  window.CanvasRenderer = CanvasRenderer;
+}

@@ -1,6 +1,6 @@
 /**
  * Chain Reaction Game Engine
- * Core board rules, critical mass, cascading explosion generator,
+ * Core board rules, critical mass, wave-based cascading explosion generator,
  * elimination and victory conditions.
  */
 
@@ -19,13 +19,13 @@ class ChainReactionEngine {
   constructor(rows = 9, cols = 6, players = []) {
     this.rows = rows;
     this.cols = cols;
-    this.players = players; // array of { id, name, colorId, isAI, isEliminated, hasPlayedFirstTurn }
+    this.players = players;
     this.board = [];
-    this.currentTurnIndex = 0;
+    this.currentPlayerIndex = 0;
     this.roundsPlayed = 0;
     this.isGameOver = false;
     this.winner = null;
-    this.history = []; // for offline undo
+    this.history = [];
     this.initBoard();
   }
 
@@ -54,9 +54,14 @@ class ChainReactionEngine {
     }
     this.isGameOver = false;
     this.winner = null;
-    this.currentTurnIndex = 0;
+    this.currentPlayerIndex = 0;
     this.roundsPlayed = 0;
     this.history = [];
+
+    for (const p of this.players) {
+      p.isEliminated = false;
+      p.hasPlayedFirstTurn = false;
+    }
   }
 
   getActivePlayers() {
@@ -64,9 +69,11 @@ class ChainReactionEngine {
   }
 
   getCurrentPlayer() {
-    const active = this.getActivePlayers();
-    if (active.length === 0) return null;
-    return active[this.currentTurnIndex % active.length];
+    if (this.players.length === 0) return null;
+    const p = this.players[this.currentPlayerIndex];
+    if (p && !p.isEliminated) return p;
+    // Advance to next active if current is somehow eliminated
+    return this.advanceTurn();
   }
 
   isValidMove(r, c, playerId = null) {
@@ -84,7 +91,7 @@ class ChainReactionEngine {
     return {
       board: this.board.map(row => row.map(cell => ({ ...cell }))),
       players: this.players.map(p => ({ ...p })),
-      currentTurnIndex: this.currentTurnIndex,
+      currentPlayerIndex: this.currentPlayerIndex,
       roundsPlayed: this.roundsPlayed,
       isGameOver: this.isGameOver,
       winner: this.winner
@@ -96,7 +103,7 @@ class ChainReactionEngine {
     const prev = this.history.pop();
     this.board = prev.board;
     this.players = prev.players;
-    this.currentTurnIndex = prev.currentTurnIndex;
+    this.currentPlayerIndex = prev.currentPlayerIndex;
     this.roundsPlayed = prev.roundsPlayed;
     this.isGameOver = prev.isGameOver;
     this.winner = prev.winner;
@@ -104,8 +111,8 @@ class ChainReactionEngine {
   }
 
   /**
-   * Applies a move at (r, c)
-   * Returns a sequence of atomic animation steps so the renderer can animate them smoothly!
+   * Authoritative Wave-Based Move Execution
+   * Returns: { waves, finalBoard, newlyEliminated, isGameOver, winner, nextPlayer }
    */
   makeMove(r, c, playerId = null) {
     if (!this.isValidMove(r, c, playerId)) return null;
@@ -115,91 +122,128 @@ class ChainReactionEngine {
     const player = playerId ? this.players.find(p => p.id === playerId) : this.getCurrentPlayer();
     player.hasPlayedFirstTurn = true;
 
-    const animationSteps = [];
-    const queue = [{ r, c }];
+    const waves = [];
+    const directions = [[-1, 0], [0, 1], [1, 0], [0, -1]];
 
-    // Initial placement
-    this.board[r][c].count += 1;
-    this.board[r][c].owner = player.id;
-    animationSteps.push({
-      type: 'place',
-      r,
-      c,
-      count: this.board[r][c].count,
+    // Wave 0: Initial Placement
+    const initialCell = this.board[r][c];
+    initialCell.count += 1;
+    initialCell.owner = player.id;
+
+    waves.push({
+      waveNumber: 0,
+      type: 'placement',
+      row: r,
+      col: c,
+      count: initialCell.count,
       owner: player.id
     });
 
-    let iterations = 0;
-    const maxIterations = 2000;
+    let waveNum = 1;
+    const maxWaves = 500;
 
-    while (queue.length > 0 && iterations < maxIterations) {
-      iterations++;
-      const curr = queue.shift();
-      const cell = this.board[curr.r][curr.c];
-
-      if (cell.count >= cell.maxOrbs) {
-        // Critical mass reached: Explode!
-        cell.count -= cell.maxOrbs;
-        if (cell.count === 0) {
-          cell.owner = null;
-        }
-
-        animationSteps.push({
-          type: 'explode',
-          r: curr.r,
-          c: curr.c,
-          remainingCount: cell.count,
-          owner: cell.owner
-        });
-
-        // 4 orthogonal directions: Up, Right, Down, Left
-        const directions = [[-1, 0], [0, 1], [1, 0], [0, -1]];
-        for (const [dr, dc] of directions) {
-          const nr = curr.r + dr;
-          const nc = curr.c + dc;
-          if (nr >= 0 && nr < this.rows && nc >= 0 && nc < this.cols) {
-            const neighbor = this.board[nr][nc];
-            neighbor.count += 1;
-            neighbor.owner = player.id; // Cell captured!
-
-            animationSteps.push({
-              type: 'fly_orb',
-              fromR: curr.r,
-              fromC: curr.c,
-              toR: nr,
-              toC: nc,
-              count: neighbor.count,
-              owner: player.id
+    while (waveNum <= maxWaves) {
+      // Find all cells that meet critical mass in this wave
+      const explodingCells = [];
+      for (let rowIdx = 0; rowIdx < this.rows; rowIdx++) {
+        for (let colIdx = 0; colIdx < this.cols; colIdx++) {
+          const cell = this.board[rowIdx][colIdx];
+          if (cell.count >= cell.maxOrbs) {
+            explodingCells.push({
+              r: rowIdx,
+              c: colIdx,
+              maxOrbs: cell.maxOrbs,
+              owner: cell.owner
             });
-
-            if (neighbor.count >= neighbor.maxOrbs) {
-              queue.push({ r: nr, c: nc });
-            }
           }
         }
       }
+
+      if (explodingCells.length === 0) {
+        break; // Stabilized
+      }
+
+      const currentWave = {
+        waveNumber: waveNum,
+        type: 'explosion_wave',
+        explosions: [],
+        impacts: []
+      };
+
+      // Phase A: Cells explode and shed critical mass
+      for (const exp of explodingCells) {
+        const cell = this.board[exp.r][exp.c];
+        cell.count -= exp.maxOrbs;
+        if (cell.count === 0) {
+          cell.owner = null;
+        }
+        currentWave.explosions.push({
+          r: exp.r,
+          c: exp.c,
+          remainingCount: cell.count,
+          owner: cell.owner
+        });
+      }
+
+      // Phase B: Orbs travel orthogonally to neighbor cells
+      for (const exp of explodingCells) {
+        for (const [dr, dc] of directions) {
+          const nr = exp.r + dr;
+          const nc = exp.c + dc;
+          if (nr >= 0 && nr < this.rows && nc >= 0 && nc < this.cols) {
+            const neighbor = this.board[nr][nc];
+            neighbor.count += 1;
+            neighbor.owner = player.id; // Cell captured by exploding player!
+
+            currentWave.impacts.push({
+              fromR: exp.r,
+              fromC: exp.c,
+              toR: nr,
+              toC: nc,
+              newCount: neighbor.count,
+              newOwner: player.id
+            });
+          }
+        }
+      }
+
+      waves.push(currentWave);
+      waveNum++;
     }
 
-    // Check player eliminations
-    this.checkEliminations();
+    // Check Eliminations
+    const newlyEliminated = this.checkEliminations();
 
-    // Check game over
+    // Check Victory
     this.checkVictory();
 
-    // Advance turn if game continues
+    // Advance Turn if game continues
+    let nextPlayer = null;
     if (!this.isGameOver) {
-      const surviving = this.getActivePlayers();
-      const prevIdx = surviving.findIndex(p => p.id === player.id);
-      this.currentTurnIndex = (prevIdx + 1) % surviving.length;
+      nextPlayer = this.advanceTurn();
       this.roundsPlayed++;
     }
 
     return {
-      steps: animationSteps,
+      waves,
+      newlyEliminated,
       isGameOver: this.isGameOver,
       winner: this.winner,
-      nextPlayer: this.getCurrentPlayer()
+      nextPlayer,
+      board: this.board
     };
+  }
+
+  advanceTurn() {
+    const n = this.players.length;
+    for (let i = 1; i <= n; i++) {
+      const nextIdx = (this.currentPlayerIndex + i) % n;
+      if (!this.players[nextIdx].isEliminated) {
+        this.currentPlayerIndex = nextIdx;
+        return this.players[nextIdx];
+      }
+    }
+    return null;
   }
 
   countOrbs() {
@@ -216,15 +260,11 @@ class ChainReactionEngine {
   }
 
   checkEliminations() {
-    // Only eliminate players once all players have completed their first placement!
-    const allStarted = this.players.every(p => p.hasPlayedFirstTurn || p.isEliminated);
-    if (!allStarted) return [];
-
     const counts = this.countOrbs();
     const eliminated = [];
 
     for (const p of this.players) {
-      if (!p.isEliminated && (!counts[p.id] || counts[p.id] === 0)) {
+      if (!p.isEliminated && p.hasPlayedFirstTurn && (!counts[p.id] || counts[p.id] === 0)) {
         p.isEliminated = true;
         eliminated.push(p);
       }
@@ -234,22 +274,28 @@ class ChainReactionEngine {
   }
 
   checkVictory() {
-    const allStarted = this.players.every(p => p.hasPlayedFirstTurn || p.isEliminated);
-    if (!allStarted) return false;
-
     const surviving = this.getActivePlayers();
-    if (surviving.length === 1) {
-      this.isGameOver = true;
-      this.winner = surviving[0];
-      return true;
-    } else if (surviving.length === 0) {
-      this.isGameOver = true;
-      this.winner = null; // Draw
-      return true;
+    const startedCount = this.players.filter(p => p.hasPlayedFirstTurn).length;
+
+    if (startedCount >= 2) {
+      if (surviving.length === 1) {
+        this.isGameOver = true;
+        this.winner = surviving[0];
+        return true;
+      } else if (surviving.length === 0) {
+        this.isGameOver = true;
+        this.winner = null; // Draw
+        return true;
+      }
     }
     return false;
   }
 }
 
-window.ChainReactionEngine = ChainReactionEngine;
-window.PLAYER_PALETTE = PLAYER_PALETTE;
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { ChainReactionEngine, PLAYER_PALETTE };
+}
+if (typeof window !== 'undefined') {
+  window.ChainReactionEngine = ChainReactionEngine;
+  window.PLAYER_PALETTE = PLAYER_PALETTE;
+}

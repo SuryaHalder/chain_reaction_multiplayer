@@ -169,67 +169,131 @@ function createEmptyBoard(rows, cols) {
   return board;
 }
 
-// Process a move with full recursive chain explosions
-function processMove(board, row, col, playerId, rows, cols) {
-  const steps = []; // Animation steps for clients to reproduce exactly
-  const queue = [{ r: row, c: col }];
+// Authoritative Wave-Based Move Resolution
+function resolveMoveWaves(board, row, col, playerId, rows, cols) {
+  const waves = [];
+  const directions = [[-1, 0], [0, 1], [1, 0], [0, -1]];
 
-  // Place initial orb
+  // Wave 0: Initial Placement
   board[row][col].count += 1;
   board[row][col].owner = playerId;
-  steps.push({ type: 'place', r: row, c: col, count: board[row][col].count, owner: playerId });
+  waves.push({
+    waveNumber: 0,
+    type: 'placement',
+    row: row,
+    col: col,
+    count: board[row][col].count,
+    owner: playerId
+  });
 
-  const maxIterations = 2000;
-  let iterations = 0;
+  let waveNum = 1;
+  const maxWaves = 500;
 
-  while (queue.length > 0 && iterations < maxIterations) {
-    iterations++;
-    const current = queue.shift();
-    const cell = board[current.r][current.c];
+  while (waveNum <= maxWaves) {
+    const explodingCells = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const cell = board[r][c];
+        if (cell.count >= cell.maxOrbs) {
+          explodingCells.push({ r, c, maxOrbs: cell.maxOrbs, owner: cell.owner });
+        }
+      }
+    }
 
-    if (cell.count >= cell.maxOrbs) {
-      // Cell explodes!
-      cell.count -= cell.maxOrbs;
+    if (explodingCells.length === 0) break;
+
+    const currentWave = {
+      waveNumber: waveNum,
+      type: 'explosion_wave',
+      explosions: [],
+      impacts: []
+    };
+
+    // Phase A: Cells explode and shed critical mass
+    for (const exp of explodingCells) {
+      const cell = board[exp.r][exp.c];
+      cell.count -= exp.maxOrbs;
       if (cell.count === 0) {
         cell.owner = null;
       }
-
-      steps.push({
-        type: 'explode',
-        r: current.r,
-        c: current.c,
+      currentWave.explosions.push({
+        r: exp.r,
+        c: exp.c,
         remainingCount: cell.count,
         owner: cell.owner
       });
+    }
 
-      // Orthogonal neighbors: [Up, Right, Down, Left]
-      const deltas = [[-1, 0], [0, 1], [1, 0], [0, -1]];
-      for (const [dr, dc] of deltas) {
-        const nr = current.r + dr;
-        const nc = current.c + dc;
+    // Phase B: Orbs travel orthogonally to neighbor cells
+    for (const exp of explodingCells) {
+      for (const [dr, dc] of directions) {
+        const nr = exp.r + dr;
+        const nc = exp.c + dc;
         if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
           const neighbor = board[nr][nc];
           neighbor.count += 1;
           neighbor.owner = playerId; // Captured by expanding player!
-          steps.push({
-            type: 'expand',
-            fromR: current.r,
-            fromC: current.c,
+          currentWave.impacts.push({
+            fromR: exp.r,
+            fromC: exp.c,
             toR: nr,
             toC: nc,
-            count: neighbor.count,
-            owner: playerId
+            newCount: neighbor.count,
+            newOwner: playerId
           });
-
-          if (neighbor.count >= neighbor.maxOrbs) {
-            queue.push({ r: nr, c: nc });
-          }
         }
       }
     }
+
+    waves.push(currentWave);
+    waveNum++;
   }
 
-  return steps;
+  return waves;
+}
+
+function advanceRoomTurn(room) {
+  const n = room.players.length;
+  for (let i = 1; i <= n; i++) {
+    const nextIdx = (room.currentTurnIndex + i) % n;
+    if (!room.players[nextIdx].isEliminated) {
+      room.currentTurnIndex = nextIdx;
+      return room.players[nextIdx];
+    }
+  }
+  return null;
+}
+
+function checkRoomEliminations(room) {
+  const counts = countPlayerOrbs(room.board, room.gridSize.rows, room.gridSize.cols);
+  const newlyEliminated = [];
+
+  for (const p of room.players) {
+    if (!p.isEliminated && p.hasPlayedFirstTurn && (!counts[p.id] || counts[p.id] === 0)) {
+      p.isEliminated = true;
+      newlyEliminated.push(p.id);
+    }
+  }
+
+  return newlyEliminated;
+}
+
+function checkRoomVictory(room) {
+  const surviving = room.players.filter(p => !p.isEliminated);
+  const startedCount = room.players.filter(p => p.hasPlayedFirstTurn).length;
+
+  if (startedCount >= 2) {
+    if (surviving.length === 1) {
+      room.status = 'FINISHED';
+      room.winner = surviving[0];
+      return true;
+    } else if (surviving.length === 0) {
+      room.status = 'FINISHED';
+      room.winner = null;
+      return true;
+    }
+  }
+  return false;
 }
 
 // Count orbs for each player on board
@@ -500,10 +564,9 @@ wss.on('connection', (ws) => {
           const room = rooms.get(playerRoomCode);
           if (!room || room.status !== 'PLAYING') return;
 
-          const activePlayers = room.players.filter(p => !p.isEliminated);
-          const currentTurnPlayer = activePlayers[room.currentTurnIndex % activePlayers.length];
+          const currentTurnPlayer = room.players[room.currentTurnIndex];
 
-          if (!currentTurnPlayer || currentTurnPlayer.id !== playerId) {
+          if (!currentTurnPlayer || currentTurnPlayer.id !== playerId || currentTurnPlayer.isEliminated) {
             sendTo(ws, { type: 'ERROR', message: 'Not your turn!' });
             return;
           }
@@ -526,55 +589,29 @@ wss.on('connection', (ws) => {
           // Mark that this player has made at least one turn
           currentTurnPlayer.hasPlayedFirstTurn = true;
 
-          // Execute move on authoritative board
-          const steps = processMove(room.board, r, c, playerId, rows, cols);
+          // Execute wave-based cascade simulation
+          const waves = resolveMoveWaves(room.board, r, c, playerId, rows, cols);
 
           // Check for eliminated players
-          const orbCounts = countPlayerOrbs(room.board, rows, cols);
-          const newlyEliminated = [];
-
-          // A player can only be eliminated if ALL active players have played their first turn!
-          const allStarted = room.players.every(p => p.hasPlayedFirstTurn || p.isEliminated);
-          if (allStarted) {
-            for (const p of room.players) {
-              if (!p.isEliminated && (!orbCounts[p.id] || orbCounts[p.id] === 0)) {
-                p.isEliminated = true;
-                newlyEliminated.push(p.id);
-              }
-            }
-          }
+          const newlyEliminated = checkRoomEliminations(room);
 
           // Check Victory Condition
-          const surviving = room.players.filter(p => !p.isEliminated);
-          let isGameOver = false;
-          let winner = null;
+          const isGameOver = checkRoomVictory(room);
+          const winner = isGameOver ? room.winner : null;
 
-          if (allStarted && surviving.length === 1) {
-            isGameOver = true;
-            winner = surviving[0];
-            room.status = 'FINISHED';
-            room.winner = serializePlayer(winner);
-          } else if (surviving.length === 0) {
-            // Draw
-            isGameOver = true;
-            room.status = 'FINISHED';
-          }
-
-          // Advance turn to next surviving player
+          // Advance turn if game continues
+          let nextPlayer = null;
           if (!isGameOver) {
-            const nextSurviving = room.players.filter(p => !p.isEliminated);
-            const prevIndex = nextSurviving.findIndex(p => p.id === playerId);
-            room.currentTurnIndex = (prevIndex + 1) % nextSurviving.length;
+            nextPlayer = advanceRoomTurn(room);
           }
-
-          const nextPlayer = isGameOver ? null : room.players.filter(p => !p.isEliminated)[room.currentTurnIndex];
 
           broadcastToRoom(playerRoomCode, {
             type: 'MOVE_RESULT',
             playerId,
             row: r,
             col: c,
-            steps,
+            waves,
+            steps: waves, // backward compatibility
             newlyEliminated,
             nextPlayerId: nextPlayer ? nextPlayer.id : null,
             isGameOver,
@@ -679,8 +716,7 @@ function serializePlayer(p) {
 }
 
 function serializeRoom(room) {
-  const activePlayers = room.players.filter(p => !p.isEliminated);
-  const currentTurnPlayer = activePlayers[room.currentTurnIndex % Math.max(1, activePlayers.length)];
+  const currentTurnPlayer = (room.players && room.players.length > 0) ? room.players[room.currentTurnIndex] : null;
 
   return {
     code: room.code,
@@ -690,7 +726,7 @@ function serializeRoom(room) {
     turnTimer: room.turnTimer,
     status: room.status,
     players: room.players.map(serializePlayer),
-    currentTurnPlayerId: currentTurnPlayer ? currentTurnPlayer.id : null,
+    currentTurnPlayerId: (currentTurnPlayer && !currentTurnPlayer.isEliminated) ? currentTurnPlayer.id : null,
     winner: room.winner,
     board: room.board
   };

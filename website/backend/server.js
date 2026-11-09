@@ -1,6 +1,10 @@
 /**
  * Chain Reaction Multiplayer WebSocket & HTTP Server
- * Serves the web frontend and handles real-time multiplayer rooms.
+ * Supports:
+ * 1. LAN Multiplayer (Local Wi-Fi / Hotspot with auto-discovery)
+ * 2. Online Multiplayer (Rooms with unique 6-character room codes)
+ * 3. Authoritative move validation & cascade calculation
+ * 4. Disconnect/reconnect tolerance with state sync
  */
 
 const http = require('http');
@@ -10,14 +14,7 @@ const os = require('os');
 const { WebSocketServer, WebSocket } = require('ws');
 
 const PORT = process.env.PORT || 8080;
-// Check if frontend is in ../frontend or ./frontend or ../client
-let FRONTEND_DIR = path.join(__dirname, '..', 'frontend');
-if (!fs.existsSync(FRONTEND_DIR)) {
-  FRONTEND_DIR = path.join(__dirname, 'frontend');
-}
-if (!fs.existsSync(FRONTEND_DIR)) {
-  FRONTEND_DIR = path.join(__dirname, '..', 'client');
-}
+const CLIENT_DIR = path.join(__dirname, '..', 'client');
 
 // Available Player Colors
 const PLAYER_COLORS = [
@@ -31,6 +28,7 @@ const PLAYER_COLORS = [
   { id: 7, name: 'White', hex: '#ffffff', glow: 'rgba(255,255,255,0.6)' }
 ];
 
+// Helper to get local network IP addresses (for LAN hosting)
 function getLocalIpAddresses() {
   const interfaces = os.networkInterfaces();
   const addresses = [];
@@ -44,6 +42,8 @@ function getLocalIpAddresses() {
   return addresses;
 }
 
+// In-Memory Rooms State
+// roomCode -> { code, hostId, maxPlayers, gridSize, turnTimer, status, players, board, turnIndex, roundsPlayed }
 const rooms = new Map();
 
 function generateRoomCode() {
@@ -55,6 +55,7 @@ function generateRoomCode() {
   return rooms.has(code) ? generateRoomCode() : code;
 }
 
+// MIME types for static server
 const MIME_TYPES = {
   '.html': 'text/html',
   '.css': 'text/css',
@@ -67,7 +68,9 @@ const MIME_TYPES = {
   '.svg': 'image/svg+xml'
 };
 
+// HTTP Server: Serves Web Client & LAN Discovery API
 const server = http.createServer((req, res) => {
+  // CORS Headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -78,6 +81,7 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // LAN Discovery endpoint
   if (req.url === '/api/lan/info' || req.url === '/api/info') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
@@ -90,19 +94,21 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Health check endpoint (for Render / Railway)
   if (req.url === '/health' || req.url === '/ping') {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('OK');
     return;
   }
 
+  // Serve static files from client folder
   let reqPath = req.url.split('?')[0];
   if (reqPath === '/' || reqPath === '') {
     reqPath = '/index.html';
   }
 
-  const safePath = path.normalize(path.join(FRONTEND_DIR, reqPath));
-  if (!safePath.startsWith(FRONTEND_DIR)) {
+  const safePath = path.normalize(path.join(CLIENT_DIR, reqPath));
+  if (!safePath.startsWith(CLIENT_DIR)) {
     res.writeHead(403);
     res.end('Forbidden');
     return;
@@ -122,6 +128,7 @@ const server = http.createServer((req, res) => {
   });
 });
 
+// WebSocket Server
 const wss = new WebSocketServer({ server });
 
 function broadcastToRoom(roomCode, message, excludeSocket = null) {
@@ -141,6 +148,7 @@ function sendTo(ws, message) {
   }
 }
 
+// Chain Reaction Game Board Logic on Server (Authoritative)
 function createEmptyBoard(rows, cols) {
   const board = [];
   for (let r = 0; r < rows; r++) {
@@ -161,65 +169,134 @@ function createEmptyBoard(rows, cols) {
   return board;
 }
 
-function processMove(board, row, col, playerId, rows, cols) {
-  const steps = [];
-  const queue = [{ r: row, c: col }];
+// Authoritative Wave-Based Move Resolution
+function resolveMoveWaves(board, row, col, playerId, rows, cols) {
+  const waves = [];
+  const directions = [[-1, 0], [0, 1], [1, 0], [0, -1]];
 
+  // Wave 0: Initial Placement
   board[row][col].count += 1;
   board[row][col].owner = playerId;
-  steps.push({ type: 'place', r: row, c: col, count: board[row][col].count, owner: playerId });
+  waves.push({
+    waveNumber: 0,
+    type: 'placement',
+    row: row,
+    col: col,
+    count: board[row][col].count,
+    owner: playerId
+  });
 
-  const maxIterations = 2000;
-  let iterations = 0;
+  let waveNum = 1;
+  const maxWaves = 500;
 
-  while (queue.length > 0 && iterations < maxIterations) {
-    iterations++;
-    const current = queue.shift();
-    const cell = board[current.r][current.c];
-
-    if (cell.count >= cell.maxOrbs) {
-      cell.count -= cell.maxOrbs;
-      if (cell.count === 0) {
-        cell.owner = null;
-      }
-
-      steps.push({
-        type: 'explode',
-        r: current.r,
-        c: current.c,
-        remainingCount: cell.count,
-        owner: cell.owner
-      });
-
-      const deltas = [[-1, 0], [0, 1], [1, 0], [0, -1]];
-      for (const [dr, dc] of deltas) {
-        const nr = current.r + dr;
-        const nc = current.c + dc;
-        if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
-          const neighbor = board[nr][nc];
-          neighbor.count += 1;
-          neighbor.owner = playerId;
-          steps.push({
-            type: 'expand',
-            fromR: current.r,
-            fromC: current.c,
-            toR: nr,
-            toC: nc,
-            count: neighbor.count,
-            owner: playerId
-          });
-
-          if (neighbor.count >= neighbor.maxOrbs) {
-            queue.push({ r: nr, c: nc });
-          }
+  while (waveNum <= maxWaves) {
+    const explodingCells = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const cell = board[r][c];
+        if (cell.count >= cell.maxOrbs) {
+          explodingCells.push({ r, c, maxOrbs: cell.maxOrbs, owner: cell.owner });
         }
       }
     }
+
+    if (explodingCells.length === 0) break;
+
+    const currentWave = {
+      waveNumber: waveNum,
+      type: 'explosion_wave',
+      explosions: [],
+      impacts: []
+    };
+
+    // Phase A: Cells explode and shed critical mass
+    for (const exp of explodingCells) {
+      const cell = board[exp.r][exp.c];
+      cell.count -= exp.maxOrbs;
+      if (cell.count === 0) {
+        cell.owner = null;
+      }
+      currentWave.explosions.push({
+        r: exp.r,
+        c: exp.c,
+        remainingCount: cell.count,
+        owner: cell.owner
+      });
+    }
+
+    // Phase B: Orbs travel orthogonally to neighbor cells
+    for (const exp of explodingCells) {
+      for (const [dr, dc] of directions) {
+        const nr = exp.r + dr;
+        const nc = exp.c + dc;
+        if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
+          const neighbor = board[nr][nc];
+          neighbor.count += 1;
+          neighbor.owner = playerId; // Captured by expanding player!
+          currentWave.impacts.push({
+            fromR: exp.r,
+            fromC: exp.c,
+            toR: nr,
+            toC: nc,
+            newCount: neighbor.count,
+            newOwner: playerId
+          });
+        }
+      }
+    }
+
+    waves.push(currentWave);
+    waveNum++;
   }
 
-  return steps;
+  return waves;
 }
 
+function advanceRoomTurn(room) {
+  const n = room.players.length;
+  for (let i = 1; i <= n; i++) {
+    const nextIdx = (room.currentTurnIndex + i) % n;
+    if (!room.players[nextIdx].isEliminated) {
+      room.currentTurnIndex = nextIdx;
+      return room.players[nextIdx];
+    }
+  }
+  return null;
+}
+
+function checkRoomEliminations(room) {
+  const counts = countPlayerOrbs(room.board, room.gridSize.rows, room.gridSize.cols);
+  const newlyEliminated = [];
+
+  for (const p of room.players) {
+    if (!p.isEliminated && p.hasPlayedFirstTurn && (!counts[p.id] || counts[p.id] === 0)) {
+      p.isEliminated = true;
+      newlyEliminated.push(p.id);
+    }
+  }
+
+  return newlyEliminated;
+}
+
+function checkRoomVictory(room) {
+  const surviving = room.players.filter(p => !p.isEliminated);
+  const startedCount = room.players.filter(p => p.hasPlayedFirstTurn).length;
+
+  if (startedCount >= 2) {
+    if (surviving.length === 1) {
+      room.status = 'FINISHED';
+      room.winner = surviving[0];
+      return true;
+    } else if (surviving.length === 0) {
+      room.status = 'FINISHED';
+      room.winner = null;
+      return true;
+    }
+  }
+  return false;
+}
+
+// Count orbs for each player on board
 function countPlayerOrbs(board, rows, cols) {
   const counts = {};
   for (let r = 0; r < rows; r++) {
@@ -271,7 +348,7 @@ wss.on('connection', (ws) => {
             maxPlayers,
             gridSize: { rows, cols },
             turnTimer,
-            status: 'LOBBY',
+            status: 'LOBBY', // LOBBY, PLAYING, FINISHED
             players: [hostPlayer],
             board: null,
             currentTurnIndex: 0,
@@ -313,6 +390,7 @@ wss.on('connection', (ws) => {
           playerRoomCode = code;
           const pName = (data.playerName || ('Player ' + (room.players.length + 1))).trim().slice(0, 16);
 
+          // Find first available color
           const takenColors = new Set(room.players.map(p => p.colorId));
           let availableColor = 0;
           for (let i = 0; i < 8; i++) {
@@ -415,9 +493,10 @@ wss.on('connection', (ws) => {
           const chosenColorId = parseInt(data.colorId, 10);
           if (chosenColorId < 0 || chosenColorId >= 8) return;
 
+          // Check if taken
           const isTaken = room.players.some(p => p.id !== playerId && p.colorId === chosenColorId);
           if (isTaken) {
-            sendTo(ws, { type: 'ERROR', message: 'This color is already taken.' });
+            sendTo(ws, { type: 'ERROR', message: 'This color is already taken by another player.' });
             return;
           }
 
@@ -453,10 +532,11 @@ wss.on('connection', (ws) => {
           if (!room || room.hostId !== playerId || room.status !== 'LOBBY') return;
 
           if (room.players.length < 2) {
-            sendTo(ws, { type: 'ERROR', message: 'Need at least 2 players to start!' });
+            sendTo(ws, { type: 'ERROR', message: 'Need at least 2 players to start the game!' });
             return;
           }
 
+          // Check if all non-host players are ready
           const unready = room.players.filter(p => !p.isReady && !p.isHost);
           if (unready.length > 0) {
             sendTo(ws, { type: 'ERROR', message: 'Waiting for all players to click Ready!' });
@@ -484,10 +564,9 @@ wss.on('connection', (ws) => {
           const room = rooms.get(playerRoomCode);
           if (!room || room.status !== 'PLAYING') return;
 
-          const activePlayers = room.players.filter(p => !p.isEliminated);
-          const currentTurnPlayer = activePlayers[room.currentTurnIndex % activePlayers.length];
+          const currentTurnPlayer = room.players[room.currentTurnIndex];
 
-          if (!currentTurnPlayer || currentTurnPlayer.id !== playerId) {
+          if (!currentTurnPlayer || currentTurnPlayer.id !== playerId || currentTurnPlayer.isEliminated) {
             sendTo(ws, { type: 'ERROR', message: 'Not your turn!' });
             return;
           }
@@ -503,54 +582,36 @@ wss.on('connection', (ws) => {
 
           const cell = room.board[r][c];
           if (cell.owner !== null && cell.owner !== playerId) {
-            sendTo(ws, { type: 'ERROR', message: 'Cell already occupied by opponent!' });
+            sendTo(ws, { type: 'ERROR', message: 'You can only place orbs on empty cells or cells you own!' });
             return;
           }
 
+          // Mark that this player has made at least one turn
           currentTurnPlayer.hasPlayedFirstTurn = true;
-          const steps = processMove(room.board, r, c, playerId, rows, cols);
 
-          const orbCounts = countPlayerOrbs(room.board, rows, cols);
-          const newlyEliminated = [];
+          // Execute wave-based cascade simulation
+          const waves = resolveMoveWaves(room.board, r, c, playerId, rows, cols);
 
-          const allStarted = room.players.every(p => p.hasPlayedFirstTurn || p.isEliminated);
-          if (allStarted) {
-            for (const p of room.players) {
-              if (!p.isEliminated && (!orbCounts[p.id] || orbCounts[p.id] === 0)) {
-                p.isEliminated = true;
-                newlyEliminated.push(p.id);
-              }
-            }
-          }
+          // Check for eliminated players
+          const newlyEliminated = checkRoomEliminations(room);
 
-          const surviving = room.players.filter(p => !p.isEliminated);
-          let isGameOver = false;
-          let winner = null;
+          // Check Victory Condition
+          const isGameOver = checkRoomVictory(room);
+          const winner = isGameOver ? room.winner : null;
 
-          if (allStarted && surviving.length === 1) {
-            isGameOver = true;
-            winner = surviving[0];
-            room.status = 'FINISHED';
-            room.winner = serializePlayer(winner);
-          } else if (surviving.length === 0) {
-            isGameOver = true;
-            room.status = 'FINISHED';
-          }
-
+          // Advance turn if game continues
+          let nextPlayer = null;
           if (!isGameOver) {
-            const nextSurviving = room.players.filter(p => !p.isEliminated);
-            const prevIndex = nextSurviving.findIndex(p => p.id === playerId);
-            room.currentTurnIndex = (prevIndex + 1) % nextSurviving.length;
+            nextPlayer = advanceRoomTurn(room);
           }
-
-          const nextPlayer = isGameOver ? null : room.players.filter(p => !p.isEliminated)[room.currentTurnIndex];
 
           broadcastToRoom(playerRoomCode, {
             type: 'MOVE_RESULT',
             playerId,
             row: r,
             col: c,
-            steps,
+            waves,
+            steps: waves, // backward compatibility
             newlyEliminated,
             nextPlayerId: nextPlayer ? nextPlayer.id : null,
             isGameOver,
@@ -585,9 +646,26 @@ wss.on('connection', (ws) => {
           sendTo(ws, { type: 'PONG' });
           break;
         }
+
+        case 'CHAT': {
+          const room = rooms.get(playerRoomCode);
+          if (!room) return;
+          const player = room.players.find(p => p.id === playerId);
+          const text = (data.text || '').trim().slice(0, 100);
+          if (text && player) {
+            broadcastToRoom(playerRoomCode, {
+              type: 'CHAT_MESSAGE',
+              playerId,
+              playerName: player.name,
+              colorId: player.colorId,
+              text
+            });
+          }
+          break;
+        }
       }
     } catch (err) {
-      console.error('WebSocket error:', err);
+      console.error('WebSocket message parsing error:', err);
     }
   });
 
@@ -596,10 +674,12 @@ wss.on('connection', (ws) => {
       const room = rooms.get(playerRoomCode);
       if (room) {
         if (room.status === 'LOBBY') {
+          // Remove player from lobby
           room.players = room.players.filter(p => p.id !== playerId);
           if (room.players.length === 0) {
             rooms.delete(playerRoomCode);
           } else {
+            // Reassign host if host left
             if (room.hostId === playerId) {
               room.hostId = room.players[0].id;
               room.players[0].isHost = true;
@@ -611,6 +691,7 @@ wss.on('connection', (ws) => {
             });
           }
         } else {
+          // In game: mark disconnected
           broadcastToRoom(playerRoomCode, {
             type: 'PLAYER_DISCONNECTED',
             playerId
@@ -621,6 +702,7 @@ wss.on('connection', (ws) => {
   });
 });
 
+// Helper serializers (exclude ws reference)
 function serializePlayer(p) {
   return {
     id: p.id,
@@ -634,8 +716,7 @@ function serializePlayer(p) {
 }
 
 function serializeRoom(room) {
-  const activePlayers = room.players.filter(p => !p.isEliminated);
-  const currentTurnPlayer = activePlayers[room.currentTurnIndex % Math.max(1, activePlayers.length)];
+  const currentTurnPlayer = (room.players && room.players.length > 0) ? room.players[room.currentTurnIndex] : null;
 
   return {
     code: room.code,
@@ -645,12 +726,22 @@ function serializeRoom(room) {
     turnTimer: room.turnTimer,
     status: room.status,
     players: room.players.map(serializePlayer),
-    currentTurnPlayerId: currentTurnPlayer ? currentTurnPlayer.id : null,
+    currentTurnPlayerId: (currentTurnPlayer && !currentTurnPlayer.isEliminated) ? currentTurnPlayer.id : null,
     winner: room.winner,
     board: room.board
   };
 }
 
+// Start Server
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Chain Reaction Web Server listening on port ${PORT}`);
+  const ips = getLocalIpAddresses();
+  console.log('====================================================');
+  console.log('   CHAIN REACTION MULTIPLAYER SERVER RUNNING        ');
+  console.log('====================================================');
+  console.log(`Port: ${PORT}`);
+  console.log(`Local Access: http://localhost:${PORT}`);
+  console.log('LAN Addresses (for local network play):');
+  ips.forEach(ip => console.log(`  http://${ip}:${PORT}`));
+  console.log('WebSocket Server ready for LAN & Online games!');
+  console.log('====================================================');
 });

@@ -1,9 +1,11 @@
 /**
- * Chain Reaction Web Application Coordinator
- * Connects to live Render WebSocket backend: wss://chain-reaction-server-qq7p.onrender.com
+ * Chain Reaction Application Coordinator
+ * Handles UI screens, button clicks, game loop orchestration,
+ * LAN & Online multiplayer flows, and toast alerts.
  */
 
 document.addEventListener('DOMContentLoaded', () => {
+  // DOM Elements
   const screens = {
     menu: document.getElementById('screen-menu'),
     setupLocal: document.getElementById('screen-setup-local'),
@@ -20,27 +22,26 @@ document.addEventListener('DOMContentLoaded', () => {
   let engine = null;
   let aiOpponent = null;
 
-  // Determine smart default server URL
+  // State
+  let gameMode = 'LOCAL'; // LOCAL, AI, LAN, ONLINE
   const LIVE_RENDER_URL = 'wss://chain-reaction-server-qq7p.onrender.com';
   let defaultUrl = LIVE_RENDER_URL;
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
     defaultUrl = 'ws://' + window.location.host;
-  } else if (window.location.host.includes('onrender.com')) {
-    defaultUrl = 'wss://' + window.location.host;
   }
-
   let currentServerUrl = localStorage.getItem('cr_server_url') || defaultUrl;
-  let gameMode = 'LOCAL';
+
   let turnTimerId = null;
   let remainingSeconds = 0;
   let myPlayerId = null;
 
-  // Unlock Web Audio API on first interaction
+  // Sound manager unlock on first interaction
   document.body.addEventListener('pointerdown', () => {
     window.soundManager.init();
     window.soundManager.unlock();
   }, { once: true });
 
+  // Navigation helpers
   function showScreen(name) {
     Object.keys(screens).forEach(k => {
       if (screens[k]) screens[k].classList.remove('active');
@@ -69,12 +70,14 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-mode-local').onclick = () => showScreen('setupLocal');
   document.getElementById('btn-mode-ai').onclick = () => showScreen('setupAi');
   document.getElementById('btn-mode-lan').onclick = () => {
+    // Show current LAN IPs if available from server
     fetchLanInfo();
     showScreen('setupLan');
   };
   document.getElementById('btn-mode-online').onclick = () => showScreen('setupOnline');
   document.getElementById('btn-settings').onclick = () => screens.settings.classList.add('active');
 
+  // Back buttons
   document.querySelectorAll('.btn-back').forEach(btn => {
     btn.onclick = () => {
       window.soundManager.play('click');
@@ -83,7 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   });
 
-  // Settings
+  // Settings Modal Close & Save
   document.getElementById('btn-close-settings').onclick = () => {
     const urlInput = document.getElementById('setting-server-url').value.trim();
     if (urlInput) {
@@ -99,9 +102,10 @@ document.addEventListener('DOMContentLoaded', () => {
     window.soundManager.enabled = toggleSound.checked;
   };
 
+  // Populate server URL input
   document.getElementById('setting-server-url').value = currentServerUrl;
 
-  // --- 1. LOCAL PASS & PLAY ---
+  // --- 1. LOCAL PASS & PLAY SETUP ---
   document.getElementById('btn-start-local').onclick = () => {
     window.soundManager.play('click');
     gameMode = 'LOCAL';
@@ -126,7 +130,7 @@ document.addEventListener('DOMContentLoaded', () => {
     startOfflineGame(rows, cols, players);
   };
 
-  // --- 2. PLAY VS AI ---
+  // --- 2. PLAY VS AI SETUP ---
   document.getElementById('btn-start-ai').onclick = () => {
     window.soundManager.play('click');
     gameMode = 'AI';
@@ -160,7 +164,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function startOfflineGame(rows, cols, players) {
     engine = new ChainReactionEngine(rows, cols, players);
     renderer.setEngine(engine);
-    myPlayerId = null;
+    myPlayerId = null; // in offline mode, any current player can tap
 
     document.getElementById('btn-undo').style.display = (gameMode === 'LOCAL' ? 'inline-block' : 'none');
     showScreen('game');
@@ -168,7 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
     checkAiTurn();
   }
 
-  // --- 3. LAN MULTIPLAYER ---
+  // --- 3. LAN MULTIPLAYER SETUP ---
   async function fetchLanInfo() {
     try {
       const resp = await fetch('/api/lan/info');
@@ -184,7 +188,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('btn-lan-create').onclick = async () => {
     const name = document.getElementById('lan-player-name').value || 'Host';
+    const hostPort = document.getElementById('lan-host-port').value || '8080';
     let hostUrl = currentServerUrl;
+
+    // If on LAN, connect to the local IP / current host
     await connectAndCreateRoom(hostUrl, name, 'LAN');
   };
 
@@ -209,7 +216,7 @@ document.addEventListener('DOMContentLoaded', () => {
     await connectAndJoinRoom(serverUrl, code, name, 'LAN');
   };
 
-  // --- 4. ONLINE MULTIPLAYER ---
+  // --- 4. ONLINE MULTIPLAYER SETUP ---
   document.getElementById('btn-online-create').onclick = async () => {
     const name = document.getElementById('online-player-name').value || 'Player 1';
     await connectAndCreateRoom(currentServerUrl, name, 'ONLINE');
@@ -230,7 +237,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function connectAndCreateRoom(url, playerName, mode) {
     gameMode = mode;
     try {
-      showToast('Connecting to online server...');
+      showToast('Connecting to server...');
       await window.networkClient.connect(url);
       window.networkClient.createRoom(playerName, {
         gridSize: { rows: 9, cols: 6 },
@@ -238,22 +245,22 @@ document.addEventListener('DOMContentLoaded', () => {
         turnTimer: 20
       });
     } catch (err) {
-      showToast(err.message, 4500);
+      showToast('Failed to connect: ' + err.message);
     }
   }
 
   async function connectAndJoinRoom(url, roomCode, playerName, mode) {
     gameMode = mode;
     try {
-      showToast('Connecting to online server...');
+      showToast('Connecting to server...');
       await window.networkClient.connect(url);
       window.networkClient.joinRoom(roomCode, playerName);
     } catch (err) {
-      showToast(err.message, 4500);
+      showToast('Failed to connect: ' + err.message);
     }
   }
 
-  // --- MULTIPLAYER LOBBY ---
+  // --- MULTIPLAYER LOBBY HANDLERS ---
   window.networkClient.on('room_created', (data) => {
     myPlayerId = data.playerId;
     setupLobbyUI(data.room, true);
@@ -284,6 +291,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   window.networkClient.on('color_changed', (data) => {
+    // re-render player list
     const playerEl = document.querySelector(`[data-player-id="${data.playerId}"]`);
     if (playerEl) {
       const col = window.PLAYER_PALETTE[data.colorId];
@@ -305,22 +313,36 @@ document.addEventListener('DOMContentLoaded', () => {
     engine = new ChainReactionEngine(room.gridSize.rows, room.gridSize.cols, room.players);
     renderer.setEngine(engine);
 
-    document.getElementById('btn-undo').style.display = 'none';
+    document.getElementById('btn-undo').style.display = 'none'; // No undo in online
     showScreen('game');
     updateHud();
     startTurnTimer(room.turnTimer);
   });
 
   window.networkClient.on('move_result', (data) => {
-    renderer.enqueueSteps(data.steps, () => {
+    // Execute incoming move animation wave-by-wave
+    const waves = data.waves || data.steps || [];
+    renderer.enqueueWaves(waves, data.board, () => {
+      // Update board state & player eliminations
       engine.board = data.board;
+      if (data.newlyEliminated && data.newlyEliminated.length > 0) {
+        data.newlyEliminated.forEach(elimId => {
+          const p = engine.players.find(pl => pl.id === elimId);
+          if (p) {
+            p.isEliminated = true;
+            showToast(`${p.name} eliminated!`);
+          }
+        });
+      }
+
       if (data.isGameOver) {
         showGameOver(data.winner);
       } else {
-        const nextPlayer = engine.players.find(p => p.id === data.nextPlayerId);
-        if (nextPlayer) {
-          const surviving = engine.getActivePlayers();
-          engine.currentTurnIndex = surviving.findIndex(p => p.id === nextPlayer.id);
+        if (data.nextPlayerId) {
+          const nextIdx = engine.players.findIndex(p => p.id === data.nextPlayerId);
+          if (nextIdx !== -1) {
+            engine.currentPlayerIndex = nextIdx;
+          }
         }
         updateHud();
         startTurnTimer(20);
@@ -357,7 +379,7 @@ document.addEventListener('DOMContentLoaded', () => {
       playerList.appendChild(item);
     });
 
-    // Color picker
+    // Render Color Picker
     const colorPicker = document.getElementById('lobby-color-picker');
     colorPicker.innerHTML = '';
     window.PLAYER_PALETTE.forEach(c => {
@@ -380,6 +402,7 @@ document.addEventListener('DOMContentLoaded', () => {
       colorPicker.appendChild(btn);
     });
 
+    // Host controls vs Ready button
     const hostControls = document.getElementById('lobby-host-controls');
     const btnStart = document.getElementById('btn-lobby-start');
     const btnReady = document.getElementById('btn-lobby-ready');
@@ -410,14 +433,15 @@ document.addEventListener('DOMContentLoaded', () => {
       };
     }
 
+    // Copy room code button
     document.getElementById('btn-copy-code').onclick = () => {
       navigator.clipboard.writeText(room.code);
       showToast('Room Code copied to clipboard!');
     };
 
+    // Share room button (WhatsApp / System Share)
     document.getElementById('btn-share-room').onclick = () => {
-      const shareUrl = window.location.href.split('?')[0];
-      const shareText = `Play Chain Reaction with me! Room Code: ${room.code}\nPlay online: ${shareUrl}`;
+      const shareText = `Join my Chain Reaction room! Code: ${room.code}\nPlay online: ${window.location.href}`;
       if (navigator.share) {
         navigator.share({ title: 'Chain Reaction Game', text: shareText });
       } else {
@@ -427,7 +451,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
-  // --- CANVAS INTERACTION ---
+  // --- CANVAS INTERACTION (MAKING A MOVE) ---
   canvas.addEventListener('pointerdown', (e) => {
     if (!engine || engine.isGameOver || renderer.animating) return;
 
@@ -462,13 +486,20 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function executeLocalMove(r, c) {
+    if (!engine || engine.isGameOver || renderer.animating) return;
     const result = engine.makeMove(r, c);
     if (!result) {
       window.soundManager.play('beep', { pitch: 0.5 });
       return;
     }
 
-    renderer.enqueueSteps(result.steps, () => {
+    if (result.newlyEliminated && result.newlyEliminated.length > 0) {
+      result.newlyEliminated.forEach(p => {
+        showToast(`${p.name} eliminated!`);
+      });
+    }
+
+    renderer.enqueueWaves(result.waves, result.board, () => {
       if (result.isGameOver) {
         showGameOver(result.winner);
       } else {
@@ -505,6 +536,7 @@ document.addEventListener('DOMContentLoaded', () => {
     turnIndicator.style.color = color.hex;
     turnIndicator.style.textShadow = `0 0 12px ${color.glow}`;
 
+    // Scoreboard orbs count
     const counts = engine.countOrbs();
     const scoreContainer = document.getElementById('hud-player-scores');
     scoreContainer.innerHTML = '';
@@ -546,10 +578,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (remainingSeconds <= 0) {
         clearInterval(turnTimerId);
+        // Time expired
       }
     }, 1000);
   }
 
+  // --- GAME OVER MODAL ---
   function showGameOver(winner) {
     clearInterval(turnTimerId);
     window.soundManager.play('laser2');
@@ -593,6 +627,7 @@ document.addEventListener('DOMContentLoaded', () => {
     showScreen('menu');
   };
 
+  // In-Game Menu Button
   document.getElementById('btn-game-menu').onclick = () => {
     if (confirm('Leave current game?')) {
       clearInterval(turnTimerId);
@@ -601,6 +636,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
+  // Undo button (Local mode only)
   document.getElementById('btn-undo').onclick = () => {
     if (gameMode === 'LOCAL' && engine) {
       if (engine.undo()) {
