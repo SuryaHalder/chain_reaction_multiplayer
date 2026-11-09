@@ -437,6 +437,22 @@
 
   <!-- SCREEN 7: IN-GAME HUD & CANVAS (RESPONSIVE ARENA) -->
   <div id="screen-game" class="screen">
+    <!-- Top Game Meta Bar (Room Code & Match Mode) -->
+    <div class="game-meta-header">
+      <div id="hud-room-code-tag" class="room-pill in-game-room-pill" style="display: none;">
+        <span class="room-pill-label">ROOM:</span>
+        <span id="hud-room-code-val" class="room-pill-code">------</span>
+        <button id="btn-hud-copy-room" class="icon-tool" title="Copy Room Code">📋</button>
+      </div>
+      <div id="hud-match-mode-tag" class="match-mode-pill">PASS &amp; PLAY</div>
+    </div>
+
+    <!-- Alert Banner: Waiting for rejoin -->
+    <div id="hud-reconnect-banner" class="hud-alert-banner" style="display: none;">
+      <span class="alert-pulse-dot"></span>
+      <span id="hud-reconnect-msg">Player left, waiting for rejoin...</span>
+    </div>
+
     <div class="game-layout">
       <!-- Main Game Board Canvas Arena -->
       <div class="canvas-panel">
@@ -547,6 +563,16 @@
         <button id="btn-quit-cancel" class="btn-modal-secondary">Keep Playing</button>
         <button id="btn-quit-confirm" class="btn-modal-danger">Yes, Quit Game</button>
       </div>
+    </div>
+  </div>
+
+  <!-- RECONNECTING OVERLAY MODAL -->
+  <div id="modal-reconnecting" class="modal">
+    <div class="modal-card reconnect-card">
+      <div class="loading-spinner-ring"></div>
+      <h2 class="reconnect-headline">Rejoining Match...</h2>
+      <p id="reconnect-status-text" class="reconnect-sub">Restoring game state and reconnecting to room...</p>
+      <button id="btn-reconnect-cancel" class="btn-modal-secondary mt-md">Cancel &amp; Return to Menu</button>
     </div>
   </div>
 

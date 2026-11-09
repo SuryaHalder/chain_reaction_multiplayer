@@ -169,6 +169,24 @@ document.addEventListener('DOMContentLoaded', () => {
         currentTurnTimer = saved.turnTimer !== undefined ? saved.turnTimer : 20;
         const targetUrl = saved.serverUrl || currentServerUrl;
 
+        const recModal = document.getElementById('modal-reconnecting');
+        const recText = document.getElementById('reconnect-status-text');
+        if (recModal) recModal.classList.add('active');
+        if (recText) recText.innerText = `Rejoining Room ${saved.roomCode}... Restoring your match...`;
+
+        const btnRecCancel = document.getElementById('btn-reconnect-cancel');
+        if (btnRecCancel) {
+          btnRecCancel.onclick = () => {
+            if (recModal) recModal.classList.remove('active');
+            clearSession();
+            if (window.networkClient && window.networkClient.isConnected) {
+              window.networkClient.leaveRoom();
+            }
+            window.networkClient.disconnect();
+            showScreen('menu');
+          };
+        }
+
         showToast(`Reconnecting to room (${saved.roomCode})...`, 4000);
 
         try {
@@ -176,6 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
           window.networkClient.reconnect(saved.roomCode, saved.playerId);
         } catch (err) {
           console.warn('Auto-reconnect failed:', err);
+          if (recModal) recModal.classList.remove('active');
           clearSession();
           showToast('Could not reconnect to previous room.');
           showScreen('menu');
@@ -455,6 +474,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const room = data.room;
     if (!room) return;
 
+    const recModal = document.getElementById('modal-reconnecting');
+    if (recModal) recModal.classList.remove('active');
+
+    const banner = document.getElementById('hud-reconnect-banner');
+    if (banner) banner.style.display = 'none';
+
     saveSession();
 
     if (room.status === 'LOBBY') {
@@ -495,6 +520,9 @@ document.addEventListener('DOMContentLoaded', () => {
     window.soundManager.play('beep', { pitch: 0.4 });
     window.soundManager.vibrate([100, 50, 100]);
 
+    const banner = document.getElementById('hud-reconnect-banner');
+    if (banner) banner.style.display = 'none';
+
     if (data.isForfeit && data.winner) {
       showToast(`🚪 ${data.playerName || 'Opponent'} left the game! ${data.winner.name} wins by forfeit!`, 5000);
       showGameOver(data.winner);
@@ -523,7 +551,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   window.networkClient.on('player_disconnected', (data) => {
     window.soundManager.play('beep', { pitch: 0.5 });
-    showToast(`⚠️ ${data.playerName || 'A player'} disconnected (waiting for reconnect)...`, 3500);
+    const pName = data.playerName || 'Player';
+    showToast(`⚠️ ${pName} left, waiting for rejoin...`, 5000);
+
+    const banner = document.getElementById('hud-reconnect-banner');
+    const msg = document.getElementById('hud-reconnect-msg');
+    if (banner && msg) {
+      banner.className = 'hud-alert-banner';
+      msg.innerText = `⚠️ ${pName} left, waiting for rejoin...`;
+      banner.style.display = 'flex';
+    }
 
     if (engine && data.playerId) {
       const p = engine.players.find(pl => pl.id === data.playerId);
@@ -534,7 +571,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
   window.networkClient.on('player_reconnected', (data) => {
     window.soundManager.play('beep', { pitch: 1.2 });
-    showToast(`🟢 ${data.playerName || 'A player'} reconnected!`, 3000);
+    const pName = data.playerName || 'Player';
+    showToast(`🟢 ${pName} rejoined the match!`, 3000);
+
+    const banner = document.getElementById('hud-reconnect-banner');
+    const msg = document.getElementById('hud-reconnect-msg');
+    if (banner && msg) {
+      banner.className = 'hud-alert-banner success';
+      msg.innerText = `🟢 ${pName} rejoined the match!`;
+      banner.style.display = 'flex';
+      setTimeout(() => {
+        banner.style.display = 'none';
+      }, 3500);
+    }
 
     if (engine && data.playerId) {
       const p = engine.players.find(pl => pl.id === data.playerId);
@@ -845,6 +894,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const current = engine.getCurrentPlayer();
     if (!current) return;
 
+    // In-Game Room Code Tag & Mode Pill on Top
+    const roomPill = document.getElementById('hud-room-code-tag');
+    const roomVal = document.getElementById('hud-room-code-val');
+    const modePill = document.getElementById('hud-match-mode-tag');
+
+    if (gameMode === 'ONLINE' || gameMode === 'LAN') {
+      if (roomPill) roomPill.style.display = 'inline-flex';
+      if (roomVal) roomVal.innerText = (window.networkClient && window.networkClient.roomCode) ? window.networkClient.roomCode : '------';
+      if (modePill) modePill.innerText = (gameMode === 'ONLINE' ? 'ONLINE MULTIPLAYER' : 'LAN MULTIPLAYER');
+    } else {
+      if (roomPill) roomPill.style.display = 'none';
+      if (modePill) modePill.innerText = (gameMode === 'LOCAL' ? 'PASS & PLAY' : 'PLAY VS AI');
+    }
+
     const color = window.PLAYER_PALETTE[current.colorId] || window.PLAYER_PALETTE[0];
     const turnIndicator = document.getElementById('hud-current-turn');
     turnIndicator.innerText = `${current.name}'s Turn`;
@@ -1088,6 +1151,18 @@ document.addEventListener('DOMContentLoaded', () => {
       window.soundManager.play('click');
       const settingsModal = document.getElementById('modal-settings');
       if (settingsModal) settingsModal.classList.add('active');
+    };
+  }
+
+  // Copy Room Code Button on In-Game Top Bar
+  const btnHudCopyRoom = document.getElementById('btn-hud-copy-room');
+  if (btnHudCopyRoom) {
+    btnHudCopyRoom.onclick = () => {
+      const code = (window.networkClient && window.networkClient.roomCode) ? window.networkClient.roomCode : null;
+      if (code) {
+        navigator.clipboard.writeText(code);
+        showToast(`Room Code ${code} copied to clipboard!`);
+      }
     };
   }
 
