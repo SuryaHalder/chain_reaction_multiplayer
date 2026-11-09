@@ -296,6 +296,51 @@ function checkRoomVictory(room) {
   return false;
 }
 
+function stopServerTurnTimer(room) {
+  if (room && room.turnTimeoutHandle) {
+    clearTimeout(room.turnTimeoutHandle);
+    room.turnTimeoutHandle = null;
+  }
+}
+
+function startServerTurnTimer(roomCode) {
+  const room = rooms.get(roomCode);
+  if (!room || room.status !== 'PLAYING') return;
+
+  stopServerTurnTimer(room);
+
+  const seconds = parseInt(room.turnTimer, 10);
+  if (!seconds || seconds <= 0) {
+    return; // Unlimited time
+  }
+
+  // Grace buffer of 800ms for network latency
+  const durationMs = (seconds * 1000) + 800;
+
+  room.turnTimeoutHandle = setTimeout(() => {
+    const r = rooms.get(roomCode);
+    if (!r || r.status !== 'PLAYING') return;
+
+    const timedOutPlayer = r.players[r.currentTurnIndex];
+    if (!timedOutPlayer) return;
+
+    // Advance turn to next surviving player
+    const nextPlayer = advanceRoomTurn(r);
+
+    broadcastToRoom(roomCode, {
+      type: 'TURN_TIMEOUT',
+      skippedPlayerId: timedOutPlayer.id,
+      skippedPlayerName: timedOutPlayer.name,
+      nextPlayerId: nextPlayer ? nextPlayer.id : null,
+      turnTimer: r.turnTimer
+    });
+
+    if (r.status === 'PLAYING') {
+      startServerTurnTimer(roomCode);
+    }
+  }, durationMs);
+}
+
 // Count orbs for each player on board
 function countPlayerOrbs(board, rows, cols) {
   const counts = {};
@@ -347,7 +392,8 @@ wss.on('connection', (ws) => {
             hostId: playerId,
             maxPlayers,
             gridSize: { rows, cols },
-            turnTimer,
+            turnTimer: parseInt(turnTimer, 10),
+            turnTimeoutHandle: null,
             status: 'LOBBY', // LOBBY, PLAYING, FINISHED
             players: [hostPlayer],
             board: null,
@@ -558,6 +604,7 @@ wss.on('connection', (ws) => {
             type: 'GAME_STARTED',
             room: serializeRoom(room)
           });
+          startServerTurnTimer(playerRoomCode);
           break;
         }
 
@@ -589,6 +636,7 @@ wss.on('connection', (ws) => {
 
           // Mark that this player has made at least one turn
           currentTurnPlayer.hasPlayedFirstTurn = true;
+          stopServerTurnTimer(room);
 
           // Execute wave-based cascade simulation
           const waves = resolveMoveWaves(room.board, r, c, playerId, rows, cols);
@@ -604,6 +652,9 @@ wss.on('connection', (ws) => {
           let nextPlayer = null;
           if (!isGameOver) {
             nextPlayer = advanceRoomTurn(room);
+            startServerTurnTimer(playerRoomCode);
+          } else {
+            stopServerTurnTimer(room);
           }
 
           broadcastToRoom(playerRoomCode, {
@@ -666,6 +717,7 @@ wss.on('connection', (ws) => {
               room: serializeRoom(room),
               isRematch: true
             });
+            startServerTurnTimer(playerRoomCode);
           }
           break;
         }
@@ -689,6 +741,7 @@ wss.on('connection', (ws) => {
             type: 'GAME_STARTED',
             room: serializeRoom(room)
           });
+          startServerTurnTimer(playerRoomCode);
           break;
         }
 
@@ -727,6 +780,7 @@ wss.on('connection', (ws) => {
           // Remove player from lobby
           room.players = room.players.filter(p => p.id !== playerId);
           if (room.players.length === 0) {
+            stopServerTurnTimer(room);
             rooms.delete(playerRoomCode);
           } else {
             // Reassign host if host left
@@ -742,6 +796,11 @@ wss.on('connection', (ws) => {
           }
         } else {
           // In game: mark disconnected
+          const openPlayers = room.players.filter(p => p.ws && p.ws.readyState === WebSocket.OPEN && p.id !== playerId);
+          if (openPlayers.length === 0) {
+            stopServerTurnTimer(room);
+            rooms.delete(playerRoomCode);
+          }
           if (room.status === 'FINISHED' && room.rematchVotes) {
             room.rematchVotes.delete(playerId);
             const remaining = room.players.filter(p => p.ws && p.ws.readyState === WebSocket.OPEN && p.id !== playerId);

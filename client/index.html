@@ -206,6 +206,19 @@
           </select>
         </div>
 
+        <div class="form-group">
+          <label>Move Timer Limit</label>
+          <select id="local-turn-timer" class="form-control">
+            <option value="0">No Timer (Unlimited)</option>
+            <option value="10">10 Seconds (Fast Blitz)</option>
+            <option value="15">15 Seconds</option>
+            <option value="20" selected>20 Seconds (Standard)</option>
+            <option value="30">30 Seconds</option>
+            <option value="45">45 Seconds</option>
+            <option value="60">60 Seconds</option>
+          </select>
+        </div>
+
         <button id="btn-start-local" class="btn-action">Start Local Match</button>
       </div>
     </div>
@@ -247,6 +260,19 @@
           </select>
         </div>
 
+        <div class="form-group">
+          <label>Move Timer Limit</label>
+          <select id="ai-turn-timer" class="form-control">
+            <option value="0">No Timer (Unlimited)</option>
+            <option value="10">10 Seconds (Fast Blitz)</option>
+            <option value="15">15 Seconds</option>
+            <option value="20" selected>20 Seconds (Standard)</option>
+            <option value="30">30 Seconds</option>
+            <option value="45">45 Seconds</option>
+            <option value="60">60 Seconds</option>
+          </select>
+        </div>
+
         <button id="btn-start-ai" class="btn-action">Start AI Battle</button>
       </div>
     </div>
@@ -275,6 +301,18 @@
             <h4 class="col-title host-color">HOST GAME</h4>
             <p class="col-sub">Start a room on this Wi-Fi / Hotspot</p>
             <input type="hidden" id="lan-host-port" value="8080">
+            <div class="form-group mb-sm">
+              <label style="font-size: 10px;">Move Timer</label>
+              <select id="lan-turn-timer" class="form-control" style="font-size: 12px; padding: 8px;">
+                <option value="0">No Timer</option>
+                <option value="10">10s (Fast)</option>
+                <option value="15">15s</option>
+                <option value="20" selected>20s (Default)</option>
+                <option value="30">30s</option>
+                <option value="45">45s</option>
+                <option value="60">60s</option>
+              </select>
+            </div>
             <button id="btn-lan-create" class="btn-action">Create LAN Room</button>
           </div>
 
@@ -306,6 +344,19 @@
         <div class="form-group">
           <label>Your Display Name</label>
           <input type="text" id="online-player-name" class="form-control" value="Player" maxlength="15">
+        </div>
+
+        <div class="form-group">
+          <label>Turn Timer (Per Move)</label>
+          <select id="online-turn-timer" class="form-control">
+            <option value="0">No Timer (Unlimited)</option>
+            <option value="10">10 Seconds (Fast Blitz)</option>
+            <option value="15">15 Seconds</option>
+            <option value="20" selected>20 Seconds (Standard)</option>
+            <option value="30">30 Seconds</option>
+            <option value="45">45 Seconds</option>
+            <option value="60">60 Seconds</option>
+          </select>
         </div>
 
         <button id="btn-online-create" class="btn-action primary-glow-btn">
@@ -361,6 +412,18 @@
               <option value="12x8">Huge (12 × 8)</option>
             </select>
           </div>
+          <div class="form-group">
+            <label>Move Timer Limit</label>
+            <select id="lobby-turn-timer" class="form-control">
+              <option value="0">No Timer (Unlimited)</option>
+              <option value="10">10 Seconds (Fast Blitz)</option>
+              <option value="15">15 Seconds</option>
+              <option value="20" selected>20 Seconds (Standard)</option>
+              <option value="30">30 Seconds</option>
+              <option value="45">45 Seconds</option>
+              <option value="60">60 Seconds</option>
+            </select>
+          </div>
         </div>
 
         <div class="lobby-action-row">
@@ -395,8 +458,14 @@
           </div>
         </div>
 
-        <div class="timer-track">
-          <div id="hud-timer-bar" class="timer-fill"></div>
+        <div class="timer-wrapper">
+          <div class="timer-info-row">
+            <span id="hud-timer-label" class="timer-label">TIME REMAINING</span>
+            <span id="hud-timer-sec" class="timer-sec">20s</span>
+          </div>
+          <div class="timer-track">
+            <div id="hud-timer-bar" class="timer-fill"></div>
+          </div>
         </div>
 
         <div class="scoreboard-section">

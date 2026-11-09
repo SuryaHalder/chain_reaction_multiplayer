@@ -248,6 +248,85 @@ async function runTest() {
 
   ws1.close();
   ws2.close();
+
+  // --- TEST TURN TIMER TIMEOUT FLOW ---
+  console.log('\nTesting Turn Timer Timeout Flow...');
+  const ws3 = new WebSocket('ws://127.0.0.1:9999');
+  const ws4 = new WebSocket('ws://127.0.0.1:9999');
+  const p3Messages = [];
+  const p4Messages = [];
+  ws3.on('message', data => p3Messages.push(JSON.parse(data.toString())));
+  ws4.on('message', data => p4Messages.push(JSON.parse(data.toString())));
+
+  await Promise.all([
+    new Promise(res => ws3.on('open', res)),
+    new Promise(res => ws4.on('open', res))
+  ]);
+
+  // Host creates room with 2-second turn timer
+  ws3.send(JSON.stringify({
+    action: 'CREATE_ROOM',
+    playerName: 'TimerHost',
+    gridSize: { rows: 5, cols: 5 },
+    maxPlayers: 2,
+    turnTimer: 2 // 2 seconds
+  }));
+
+  await wait(200);
+  const tRoomMsg = p3Messages.find(m => m.type === 'ROOM_CREATED');
+  const timerRoomCode = tRoomMsg.roomCode;
+  const p3Id = tRoomMsg.playerId;
+
+  // Guest joins
+  ws4.send(JSON.stringify({
+    action: 'JOIN_ROOM',
+    roomCode: timerRoomCode,
+    playerName: 'TimerGuest'
+  }));
+
+  await wait(200);
+  const p4Joined = p4Messages.find(m => m.type === 'ROOM_JOINED');
+  const p4Id = p4Joined.playerId;
+
+  // Ready and Start Game
+  ws4.send(JSON.stringify({ action: 'TOGGLE_READY' }));
+  await wait(100);
+  ws3.send(JSON.stringify({ action: 'START_GAME' }));
+  await wait(200);
+
+  console.log('  Game with 2s move timer started. Waiting ~3.2 seconds without moving to trigger timeout...');
+  // 2s duration + 800ms grace = 2800ms
+  await wait(3200);
+
+  const timeoutMsg = p3Messages.find(m => m.type === 'TURN_TIMEOUT');
+  if (!timeoutMsg) {
+    throw new Error('Expected TURN_TIMEOUT event not received within timeout window!');
+  }
+  if (timeoutMsg.skippedPlayerId !== p3Id) {
+    throw new Error(`Expected skipped player to be Host (${p3Id}), got ${timeoutMsg.skippedPlayerId}`);
+  }
+  if (timeoutMsg.nextPlayerId !== p4Id) {
+    throw new Error(`Expected next player to be Guest (${p4Id}), got ${timeoutMsg.nextPlayerId}`);
+  }
+  console.log('  TURN_TIMEOUT verified: Host turn skipped, turn successfully handed to Guest!');
+
+  // Verify that it is now Guest (Player 4)'s turn by having Guest make a valid move at (1, 1)
+  ws4.send(JSON.stringify({
+    action: 'MAKE_MOVE',
+    row: 1,
+    col: 1
+  }));
+  await wait(200);
+
+  const guestMove = p4Messages.find(m => m.type === 'MOVE_RESULT');
+  if (!guestMove) {
+    throw new Error('Guest was unable to make move after timeout switch!');
+  }
+  console.log('  Post-timeout move verified: Guest successfully placed orb on their newly acquired turn!');
+
+  ws3.close();
+  ws4.close();
+
   console.log('\n>>> ALL SERVER INTEGRATION TESTS PASSED PERFECTLY! <<<');
   process.exit(0);
 }

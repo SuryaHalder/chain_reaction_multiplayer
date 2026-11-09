@@ -243,6 +243,10 @@ class NetworkClient {
         this.emitEvent('move_result', msg);
         break;
 
+      case 'TURN_TIMEOUT':
+        this.emitEvent('turn_timeout', msg);
+        break;
+
       case 'PLAYER_DISCONNECTED':
         this.emitEvent('player_disconnected', msg);
         break;

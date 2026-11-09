@@ -38,6 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let turnTimerId = null;
   let remainingSeconds = 0;
+  let currentTurnTimer = 20;
   let myPlayerId = null;
 
   // Sound manager unlock on first interaction
@@ -159,6 +160,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const gridVal = document.getElementById('local-grid-size').value.split('x');
     const rows = parseInt(gridVal[0], 10);
     const cols = parseInt(gridVal[1], 10);
+    const turnTimer = parseInt(document.getElementById('local-turn-timer').value, 10);
 
     const players = [];
     for (let i = 0; i < playerCount; i++) {
@@ -172,7 +174,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    startOfflineGame(rows, cols, players);
+    startOfflineGame(rows, cols, players, turnTimer);
   };
 
   // --- 2. PLAY VS AI SETUP ---
@@ -185,6 +187,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const gridVal = document.getElementById('ai-grid-size').value.split('x');
     const rows = parseInt(gridVal[0], 10);
     const cols = parseInt(gridVal[1], 10);
+    const turnTimer = parseInt(document.getElementById('ai-turn-timer').value, 10);
 
     aiOpponent = new ChainReactionAI(difficulty);
 
@@ -203,10 +206,11 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    startOfflineGame(rows, cols, players);
+    startOfflineGame(rows, cols, players, turnTimer);
   };
 
-  function startOfflineGame(rows, cols, players) {
+  function startOfflineGame(rows, cols, players, turnTimer = 20) {
+    currentTurnTimer = (turnTimer !== undefined) ? turnTimer : 20;
     engine = new ChainReactionEngine(rows, cols, players);
     renderer.setEngine(engine);
     myPlayerId = null; // in offline mode, any current player can tap
@@ -214,6 +218,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-undo').style.display = (gameMode === 'LOCAL' ? 'inline-block' : 'none');
     showScreen('game');
     updateHud();
+    startTurnTimer(currentTurnTimer);
     checkAiTurn();
   }
 
@@ -234,10 +239,11 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-lan-create').onclick = async () => {
     const name = document.getElementById('lan-player-name').value || 'Host';
     const hostPort = document.getElementById('lan-host-port').value || '8080';
+    const turnTimer = parseInt(document.getElementById('lan-turn-timer').value, 10);
     let hostUrl = currentServerUrl;
 
     // If on LAN, connect to the local IP / current host
-    await connectAndCreateRoom(hostUrl, name, 'LAN');
+    await connectAndCreateRoom(hostUrl, name, 'LAN', turnTimer);
   };
 
   document.getElementById('btn-lan-join').onclick = async () => {
@@ -264,7 +270,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- 4. ONLINE MULTIPLAYER SETUP ---
   document.getElementById('btn-online-create').onclick = async () => {
     const name = document.getElementById('online-player-name').value || 'Player 1';
-    await connectAndCreateRoom(currentServerUrl, name, 'ONLINE');
+    const turnTimer = parseInt(document.getElementById('online-turn-timer').value, 10);
+    await connectAndCreateRoom(currentServerUrl, name, 'ONLINE', turnTimer);
   };
 
   document.getElementById('btn-online-join').onclick = async () => {
@@ -279,15 +286,16 @@ document.addEventListener('DOMContentLoaded', () => {
     await connectAndJoinRoom(currentServerUrl, code, name, 'ONLINE');
   };
 
-  async function connectAndCreateRoom(url, playerName, mode) {
+  async function connectAndCreateRoom(url, playerName, mode, turnTimer = 20) {
     gameMode = mode;
+    currentTurnTimer = turnTimer;
     try {
       showToast('Connecting to server...');
       await window.networkClient.connect(url);
       window.networkClient.createRoom(playerName, {
         gridSize: { rows: 9, cols: 6 },
         maxPlayers: 4,
-        turnTimer: 20
+        turnTimer: turnTimer
       });
     } catch (err) {
       showToast('Failed to connect: ' + err.message);
@@ -332,7 +340,15 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   window.networkClient.on('settings_updated', (data) => {
-    document.getElementById('lobby-grid-size').value = `${data.gridSize.rows}x${data.gridSize.cols}`;
+    if (data.gridSize) {
+      const gridEl = document.getElementById('lobby-grid-size');
+      if (gridEl) gridEl.value = `${data.gridSize.rows}x${data.gridSize.cols}`;
+    }
+    if (data.turnTimer !== undefined) {
+      currentTurnTimer = data.turnTimer;
+      const timerEl = document.getElementById('lobby-turn-timer');
+      if (timerEl) timerEl.value = data.turnTimer;
+    }
   });
 
   window.networkClient.on('color_changed', (data) => {
@@ -357,13 +373,16 @@ document.addEventListener('DOMContentLoaded', () => {
     hasRequestedRematch = false;
     window.soundManager.play('laser');
     const room = data.room;
+    if (room.turnTimer !== undefined) {
+      currentTurnTimer = room.turnTimer;
+    }
     engine = new ChainReactionEngine(room.gridSize.rows, room.gridSize.cols, room.players);
     renderer.setEngine(engine);
 
     document.getElementById('btn-undo').style.display = 'none'; // No undo in online
     showScreen('game');
     updateHud();
-    startTurnTimer(room.turnTimer);
+    startTurnTimer(currentTurnTimer);
   });
 
   window.networkClient.on('move_result', (data) => {
@@ -392,9 +411,26 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         }
         updateHud();
-        startTurnTimer(20);
+        startTurnTimer(currentTurnTimer);
       }
     });
+  });
+
+  window.networkClient.on('turn_timeout', (data) => {
+    window.soundManager.play('beep', { pitch: 0.35 });
+    window.soundManager.vibrate([100, 50, 100]);
+    showToast(`${data.skippedPlayerName}'s time ran out! Turn skipped.`);
+
+    if (data.nextPlayerId && engine) {
+      const nextIdx = engine.players.findIndex(p => p.id === data.nextPlayerId);
+      if (nextIdx !== -1) {
+        engine.currentPlayerIndex = nextIdx;
+      }
+    } else if (engine) {
+      engine.advanceTurn();
+    }
+    updateHud();
+    startTurnTimer(currentTurnTimer);
   });
 
   window.networkClient.on('error', (err) => {
@@ -453,11 +489,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const hostControls = document.getElementById('lobby-host-controls');
     const btnStart = document.getElementById('btn-lobby-start');
     const btnReady = document.getElementById('btn-lobby-ready');
+    const lobbyTimerSel = document.getElementById('lobby-turn-timer');
+
+    if (lobbyTimerSel && room.turnTimer !== undefined) {
+      lobbyTimerSel.value = room.turnTimer;
+      currentTurnTimer = room.turnTimer;
+    }
 
     if (isHost) {
       hostControls.style.display = 'block';
       btnStart.style.display = 'inline-block';
       btnReady.style.display = 'none';
+      if (lobbyTimerSel) lobbyTimerSel.disabled = false;
 
       document.getElementById('lobby-grid-size').onchange = (e) => {
         const parts = e.target.value.split('x');
@@ -466,6 +509,14 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       };
 
+      if (lobbyTimerSel) {
+        lobbyTimerSel.onchange = (e) => {
+          const t = parseInt(e.target.value, 10);
+          currentTurnTimer = t;
+          window.networkClient.updateSettings({ turnTimer: t });
+        };
+      }
+
       btnStart.onclick = () => {
         window.networkClient.startGame();
       };
@@ -473,6 +524,7 @@ document.addEventListener('DOMContentLoaded', () => {
       hostControls.style.display = 'none';
       btnStart.style.display = 'none';
       btnReady.style.display = 'inline-block';
+      if (lobbyTimerSel) lobbyTimerSel.disabled = true;
 
       btnReady.onclick = () => {
         window.soundManager.play('click');
@@ -522,6 +574,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (currentPlayer.id === myPlayerId) {
         if (engine.isValidMove(cell.row, cell.col, myPlayerId)) {
           window.soundManager.play('click');
+          clearInterval(turnTimerId);
           window.networkClient.makeMove(cell.row, cell.col);
         } else {
           showToast('Invalid cell!');
@@ -540,6 +593,8 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    clearInterval(turnTimerId);
+
     if (result.newlyEliminated && result.newlyEliminated.length > 0) {
       result.newlyEliminated.forEach(p => {
         showToast(`${p.name} eliminated!`);
@@ -551,6 +606,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showGameOver(result.winner);
       } else {
         updateHud();
+        startTurnTimer(currentTurnTimer);
         checkAiTurn();
       }
     });
@@ -606,28 +662,63 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function startTurnTimer(seconds) {
     clearInterval(turnTimerId);
+    const timerBar = document.getElementById('hud-timer-bar');
+    const timerSec = document.getElementById('hud-timer-sec');
+    const timerLabel = document.getElementById('hud-timer-label');
+
+    if (timerBar) timerBar.style.background = 'var(--accent-cyan)';
+    if (timerSec) timerSec.style.color = '#ffffff';
+
     if (!seconds || seconds <= 0) {
-      document.getElementById('hud-timer-bar').style.width = '0%';
+      if (timerBar) timerBar.style.width = '100%';
+      if (timerSec) timerSec.innerText = '∞';
+      if (timerLabel) timerLabel.innerText = 'NO TIMER';
       return;
     }
 
+    if (timerLabel) timerLabel.innerText = 'TIME REMAINING';
     remainingSeconds = seconds;
-    const timerBar = document.getElementById('hud-timer-bar');
+    if (timerSec) timerSec.innerText = `${remainingSeconds}s`;
+    if (timerBar) timerBar.style.width = '100%';
 
     turnTimerId = setInterval(() => {
       remainingSeconds--;
-      const pct = (remainingSeconds / seconds) * 100;
-      timerBar.style.width = pct + '%';
+      const pct = Math.max(0, (remainingSeconds / seconds) * 100);
+      if (timerBar) timerBar.style.width = `${pct}%`;
+      if (timerSec) timerSec.innerText = `${Math.max(0, remainingSeconds)}s`;
 
       if (remainingSeconds <= 3 && remainingSeconds > 0) {
-        window.soundManager.play('beep');
+        window.soundManager.play('beep', { pitch: 1.4 });
+        if (timerBar) timerBar.style.background = '#ff4757';
+        if (timerSec) timerSec.style.color = '#ff4757';
       }
 
       if (remainingSeconds <= 0) {
         clearInterval(turnTimerId);
-        // Time expired
+        if (gameMode === 'LOCAL' || gameMode === 'AI') {
+          onLocalTurnTimeout();
+        }
       }
     }, 1000);
+  }
+
+  function onLocalTurnTimeout() {
+    if (!engine || engine.isGameOver || renderer.animating) return;
+
+    const timedOutPlayer = engine.getCurrentPlayer();
+    if (!timedOutPlayer) return;
+
+    window.soundManager.play('beep', { pitch: 0.35 });
+    window.soundManager.vibrate([100, 50, 100]);
+    showToast(`${timedOutPlayer.name}'s time ran out! Turn skipped.`);
+
+    const nextPlayer = engine.advanceTurn();
+    updateHud();
+
+    if (nextPlayer && !engine.isGameOver) {
+      startTurnTimer(currentTurnTimer);
+      checkAiTurn();
+    }
   }
 
   let hasRequestedRematch = false;
@@ -704,6 +795,7 @@ document.addEventListener('DOMContentLoaded', () => {
       engine.initBoard();
       renderer.setEngine(engine);
       updateHud();
+      startTurnTimer(currentTurnTimer);
       checkAiTurn();
     }
   };
@@ -747,6 +839,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.soundManager.play('click');
         renderer.setEngine(engine);
         updateHud();
+        startTurnTimer(currentTurnTimer);
       }
     }
   };
@@ -760,6 +853,7 @@ document.addEventListener('DOMContentLoaded', () => {
           window.soundManager.play('click');
           renderer.setEngine(engine);
           updateHud();
+          startTurnTimer(currentTurnTimer);
         }
       }
     } else if (e.key === 'Escape') {
