@@ -1,0 +1,53 @@
+# ==========================================
+# Chain Reaction Project .gitignore
+# ==========================================
+
+# 1. Build Outputs & Intermediate Compilation Artifacts
+build/
+bin/
+gen/
+obj/
+*.apk
+*.aab
+# Keep the final release APK tracked if you want people to download it directly from GitHub
+!chain-reaction-multiplayer.apk
+
+# 2. Local Build Tools & SDK Binaries (Extracted OpenJDK & Android Tools ~250MB)
+tools/
+*.keystore
+*.jks
+
+# 3. Node.js Dependencies (reinstall via `npm install` in server/)
+node_modules/
+server/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json.bak
+
+# 4. Python Bytecode & Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+
+# 5. OS Metadata & Temporary Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+[Dd]esktop.ini
+
+# 6. IDE & Editor Configurations
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
