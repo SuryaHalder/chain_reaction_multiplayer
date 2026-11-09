@@ -454,7 +454,8 @@
           </div>
           <div class="hud-actions">
             <button id="btn-undo" class="hud-icon-btn" title="Undo Move [U]">↩️</button>
-            <button id="btn-game-menu" class="hud-icon-btn" title="Settings / Exit [Esc]">⚙️</button>
+            <button id="btn-settings-hud" class="hud-icon-btn" title="Game Settings">⚙️</button>
+            <button id="btn-quit-hud" class="hud-icon-btn btn-quit-icon" title="Quit Match [Esc]">🚪</button>
           </div>
         </div>
 
@@ -473,6 +474,13 @@
           <div id="hud-player-scores" class="hud-scores-row">
             <!-- Player stats badges -->
           </div>
+        </div>
+
+        <!-- Sidebar Quit Match Button (Desktop) -->
+        <div class="hud-bottom-actions">
+          <button id="btn-sidebar-quit" class="btn-quit-sidebar" title="Quit to Main Menu [Esc]">
+            <span class="btn-quit-symbol">🚪</span> Quit Game
+          </button>
         </div>
       </div>
     </div>
@@ -525,6 +533,20 @@
       </div>
 
       <button id="btn-close-settings" class="btn-action mt-md">Save Settings</button>
+    </div>
+  </div>
+
+  <!-- QUIT GAME CONFIRMATION MODAL -->
+  <div id="modal-quit" class="modal">
+    <div class="modal-card quit-modal">
+      <div class="quit-icon-badge">🚪</div>
+      <h2 class="quit-headline">Quit Current Game?</h2>
+      <p class="quit-sub">Are you sure you want to leave this match? Your active game progress will be lost.</p>
+
+      <div class="modal-btn-row">
+        <button id="btn-quit-cancel" class="btn-modal-secondary">Keep Playing</button>
+        <button id="btn-quit-confirm" class="btn-modal-danger">Yes, Quit Game</button>
+      </div>
     </div>
   </div>
 

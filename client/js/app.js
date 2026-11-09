@@ -57,6 +57,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (name === 'game') {
       renderer.initCanvasSize();
+      setTimeout(() => {
+        renderer.initCanvasSize();
+      }, 50);
     }
   }
 
@@ -823,14 +826,51 @@ document.addEventListener('DOMContentLoaded', () => {
     showScreen('menu');
   };
 
-  // In-Game Menu Button
-  document.getElementById('btn-game-menu').onclick = () => {
-    if (confirm('Leave current game?')) {
-      clearInterval(turnTimerId);
-      window.networkClient.disconnect();
-      showScreen('menu');
+  // Quit Game Modal & Handlers
+  const quitModal = document.getElementById('modal-quit');
+  const btnQuitCancel = document.getElementById('btn-quit-cancel');
+  const btnQuitConfirm = document.getElementById('btn-quit-confirm');
+
+  function openQuitModal() {
+    window.soundManager.play('click');
+    if (quitModal) quitModal.classList.add('active');
+  }
+
+  function closeQuitModal() {
+    window.soundManager.play('click');
+    if (quitModal) quitModal.classList.remove('active');
+  }
+
+  function quitCurrentGame() {
+    window.soundManager.play('click');
+    if (quitModal) quitModal.classList.remove('active');
+    clearInterval(turnTimerId);
+    window.networkClient.disconnect();
+    if (engine) {
+      engine.isGameOver = true;
     }
-  };
+    showScreen('menu');
+    showToast('Returned to Main Menu.');
+  }
+
+  if (btnQuitCancel) btnQuitCancel.onclick = closeQuitModal;
+  if (btnQuitConfirm) btnQuitConfirm.onclick = quitCurrentGame;
+
+  // In-Game Top Bar Quit & Settings Buttons
+  const btnQuitHud = document.getElementById('btn-quit-hud');
+  if (btnQuitHud) btnQuitHud.onclick = openQuitModal;
+
+  const btnSidebarQuit = document.getElementById('btn-sidebar-quit');
+  if (btnSidebarQuit) btnSidebarQuit.onclick = openQuitModal;
+
+  const btnSettingsHud = document.getElementById('btn-settings-hud');
+  if (btnSettingsHud) {
+    btnSettingsHud.onclick = () => {
+      window.soundManager.play('click');
+      const settingsModal = document.getElementById('modal-settings');
+      if (settingsModal) settingsModal.classList.add('active');
+    };
+  }
 
   // Undo button (Local mode only)
   document.getElementById('btn-undo').onclick = () => {
@@ -856,7 +896,11 @@ document.addEventListener('DOMContentLoaded', () => {
           startTurnTimer(currentTurnTimer);
         }
       }
-    } else if (e.key === 'Escape') {
+    } else if (e.key === 'Escape' || e.key === 'q' || e.key === 'Q') {
+      if (quitModal && quitModal.classList.contains('active')) {
+        closeQuitModal();
+        return;
+      }
       const settingsModal = document.getElementById('modal-settings');
       if (settingsModal && settingsModal.classList.contains('active')) {
         settingsModal.classList.remove('active');
@@ -864,11 +908,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       const gameScreen = document.getElementById('screen-game');
       if (gameScreen && gameScreen.classList.contains('active')) {
-        if (confirm('Leave current game?')) {
-          clearInterval(turnTimerId);
-          window.networkClient.disconnect();
-          showScreen('menu');
-        }
+        openQuitModal();
       }
     }
   });
