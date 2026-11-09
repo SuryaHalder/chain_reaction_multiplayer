@@ -24,10 +24,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // State
   let gameMode = 'LOCAL'; // LOCAL, AI, LAN, ONLINE
-  let currentServerUrl = localStorage.getItem('cr_server_url') || window.location.origin.replace(/^http/, 'ws');
-  if (currentServerUrl === 'ws://' || currentServerUrl.includes('file:')) {
-    currentServerUrl = 'ws://localhost:8080';
+  const LIVE_RENDER_URL = 'wss://chain-reaction-server-qq7p.onrender.com';
+  let defaultUrl = LIVE_RENDER_URL;
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    defaultUrl = 'ws://' + window.location.host;
   }
+  let currentServerUrl = localStorage.getItem('cr_server_url') || defaultUrl;
 
   let turnTimerId = null;
   let remainingSeconds = 0;

@@ -17,9 +17,11 @@ tools/
 *.keystore
 *.jks
 
-# 3. Node.js Dependencies (reinstall via `npm install` in server/)
+# 3. Node.js Dependencies (reinstall via `npm install`)
 node_modules/
+**/node_modules/
 server/node_modules/
+website/backend/node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

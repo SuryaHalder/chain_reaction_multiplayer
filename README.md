@@ -53,11 +53,23 @@ c:\Users\hsury\Desktop\Projects\chain_reaction\chain-reaction-multiplayer.apk
 
 ---
 
-## 🛠️ Online Multiplayer Server Setup (Deploy for Free)
+## 🌐 Play Online in Web Browser
 
-The game includes a dedicated, ultra-lightweight Node.js WebSocket backend located in `server/`.
+A complete web edition of Chain Reaction is available in the [`website/`](file:///c:/Users/hsury/Desktop/Projects/chain_reaction/website) folder, connecting directly to your live Render backend:
+👉 **`https://chain-reaction-server-qq7p.onrender.com`**
 
-### Option A: Free 1-Click Hosting on Render.com (Recommended)
+You can deploy the website frontend to **Vercel**, **Netlify**, or **GitHub Pages** in seconds! See [`website/README.md`](file:///c:/Users/hsury/Desktop/Projects/chain_reaction/website/README.md) for full instructions.
+
+---
+
+## 🛠️ Online Multiplayer Server (LIVE on Render)
+
+Your dedicated cloud WebSocket server is **already live and running** at:
+* **HTTPS**: `https://chain-reaction-server-qq7p.onrender.com`
+* **WSS (WebSocket)**: `wss://chain-reaction-server-qq7p.onrender.com`
+* **Health Check**: `https://chain-reaction-server-qq7p.onrender.com/health` (Returns `200 OK`)
+
+The Android APK is pre-configured to connect to this live URL automatically!
 1. Fork or push this repository to your **GitHub** account.
 2. Sign up for free at [Render.com](https://render.com).
 3. Click **New +** ➔ **Web Service**.

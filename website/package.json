@@ -1,0 +1,12 @@
+{
+  "name": "chain-reaction-website",
+  "version": "1.0.0",
+  "description": "Chain Reaction Online Multiplayer Web Game",
+  "scripts": {
+    "start": "node backend/server.js",
+    "install:backend": "cd backend && npm install"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

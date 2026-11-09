@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: chain-reaction-website-backend
+    runtime: node
+    rootDir: website/backend
+    buildCommand: npm install
+    startCommand: node server.js
+    plan: free
+    autoDeploy: true
