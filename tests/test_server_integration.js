@@ -327,6 +327,146 @@ async function runTest() {
   ws3.close();
   ws4.close();
 
+  // --- TEST PLAYER EXIT / FORFEIT NOTIFICATION FLOW ---
+  console.log('\nTesting Player Exit / Forfeit Notification Flow...');
+  const ws5 = new WebSocket('ws://127.0.0.1:9999');
+  const ws6 = new WebSocket('ws://127.0.0.1:9999');
+  const p5Messages = [];
+  const p6Messages = [];
+  ws5.on('message', data => p5Messages.push(JSON.parse(data.toString())));
+  ws6.on('message', data => p6Messages.push(JSON.parse(data.toString())));
+
+  await Promise.all([
+    new Promise(res => ws5.on('open', res)),
+    new Promise(res => ws6.on('open', res))
+  ]);
+
+  ws5.send(JSON.stringify({
+    action: 'CREATE_ROOM',
+    playerName: 'Alice_Leaver',
+    gridSize: { rows: 5, cols: 5 },
+    maxPlayers: 2
+  }));
+  await wait(200);
+  const r5Msg = p5Messages.find(m => m.type === 'ROOM_CREATED');
+  const room5Code = r5Msg.roomCode;
+  const p5Id = r5Msg.playerId;
+
+  ws6.send(JSON.stringify({
+    action: 'JOIN_ROOM',
+    roomCode: room5Code,
+    playerName: 'Bob_Stays'
+  }));
+  await wait(200);
+  const r6Msg = p6Messages.find(m => m.type === 'ROOM_JOINED');
+  const p6Id = r6Msg.playerId;
+
+  ws6.send(JSON.stringify({ action: 'TOGGLE_READY' }));
+  await wait(100);
+  ws5.send(JSON.stringify({ action: 'START_GAME' }));
+  await wait(200);
+
+  // Player 1 voluntarily quits mid-game
+  ws5.send(JSON.stringify({ action: 'LEAVE_ROOM' }));
+  await wait(250);
+
+  const leftMsg = p6Messages.find(m => m.type === 'PLAYER_LEFT');
+  if (!leftMsg) {
+    throw new Error('Expected PLAYER_LEFT notification not received by surviving player!');
+  }
+  if (!leftMsg.isForfeit) {
+    throw new Error('Expected isForfeit to be true on voluntary quit in 1v1 match!');
+  }
+  if (!leftMsg.winner || leftMsg.winner.id !== p6Id) {
+    throw new Error(`Expected winner to be surviving player (${p6Id}), got ${leftMsg.winner?.id}`);
+  }
+  if (leftMsg.playerName !== 'Alice_Leaver') {
+    throw new Error(`Expected leaving player name to be Alice_Leaver, got ${leftMsg.playerName}`);
+  }
+  console.log('  PLAYER_LEFT verified: Remaining player notified that opponent left, awarded default victory!');
+  ws5.close();
+  ws6.close();
+
+  // --- TEST RECONNECT WITH BOARD STATE PERSISTENCE ---
+  console.log('\nTesting Reconnect with Board State Persistence...');
+  const ws7 = new WebSocket('ws://127.0.0.1:9999');
+  const ws8 = new WebSocket('ws://127.0.0.1:9999');
+  const p7Messages = [];
+  const p8Messages = [];
+  ws7.on('message', data => p7Messages.push(JSON.parse(data.toString())));
+  ws8.on('message', data => p8Messages.push(JSON.parse(data.toString())));
+
+  await Promise.all([
+    new Promise(res => ws7.on('open', res)),
+    new Promise(res => ws8.on('open', res))
+  ]);
+
+  ws7.send(JSON.stringify({
+    action: 'CREATE_ROOM',
+    playerName: 'Refresher',
+    gridSize: { rows: 4, cols: 4 },
+    maxPlayers: 2
+  }));
+  await wait(200);
+  const r7Msg = p7Messages.find(m => m.type === 'ROOM_CREATED');
+  const room7Code = r7Msg.roomCode;
+  const p7Id = r7Msg.playerId;
+
+  ws8.send(JSON.stringify({
+    action: 'JOIN_ROOM',
+    roomCode: room7Code,
+    playerName: 'Partner'
+  }));
+  await wait(200);
+  ws8.send(JSON.stringify({ action: 'TOGGLE_READY' }));
+  await wait(100);
+  ws7.send(JSON.stringify({ action: 'START_GAME' }));
+  await wait(200);
+
+  // Player 7 places an orb at (2, 2)
+  ws7.send(JSON.stringify({ action: 'MAKE_MOVE', row: 2, col: 2 }));
+  await wait(200);
+
+  // Player 7 simulates browser page reload by abruptly closing ws7
+  ws7.close();
+  await wait(200);
+
+  const disconnectMsg = p8Messages.find(m => m.type === 'PLAYER_DISCONNECTED');
+  if (!disconnectMsg || disconnectMsg.playerId !== p7Id) {
+    throw new Error('Expected PLAYER_DISCONNECTED event on partner socket');
+  }
+  console.log('  Partner received PLAYER_DISCONNECTED on reload');
+
+  // Player 7 opens new WebSocket (simulating page reload complete)
+  const ws9 = new WebSocket('ws://127.0.0.1:9999');
+  const p9Messages = [];
+  ws9.on('message', data => p9Messages.push(JSON.parse(data.toString())));
+  await new Promise(res => ws9.on('open', res));
+
+  // Reconnect with same credentials
+  ws9.send(JSON.stringify({
+    action: 'RECONNECT',
+    roomCode: room7Code,
+    playerId: p7Id
+  }));
+  await wait(250);
+
+  const reconnectedMsg = p9Messages.find(m => m.type === 'RECONNECTED');
+  if (!reconnectedMsg) {
+    throw new Error('Expected RECONNECTED message on reconnected socket');
+  }
+  if (!reconnectedMsg.room || reconnectedMsg.room.board[2][2].count !== 1) {
+    throw new Error('Board state was not preserved upon reconnection!');
+  }
+  const partnerReconnected = p8Messages.find(m => m.type === 'PLAYER_RECONNECTED');
+  if (!partnerReconnected || partnerReconnected.playerId !== p7Id) {
+    throw new Error('Partner did not receive PLAYER_RECONNECTED event');
+  }
+  console.log('  RECONNECTED verified: Match state and board orbs successfully restored on refresh!');
+
+  ws8.close();
+  ws9.close();
+
   console.log('\n>>> ALL SERVER INTEGRATION TESTS PASSED PERFECTLY! <<<');
   process.exit(0);
 }

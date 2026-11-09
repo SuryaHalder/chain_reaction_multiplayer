@@ -135,6 +135,12 @@ class NetworkClient {
     });
   }
 
+  leaveRoom() {
+    this.send({
+      action: 'LEAVE_ROOM'
+    });
+  }
+
   reconnect(roomCode, playerId) {
     this.send({
       action: 'RECONNECT',
@@ -249,6 +255,10 @@ class NetworkClient {
 
       case 'PLAYER_DISCONNECTED':
         this.emitEvent('player_disconnected', msg);
+        break;
+
+      case 'PLAYER_RECONNECTED':
+        this.emitEvent('player_reconnected', msg);
         break;
 
       case 'ERROR':

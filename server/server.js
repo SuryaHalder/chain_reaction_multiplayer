@@ -491,7 +491,13 @@ wss.on('connection', (ws) => {
             return;
           }
 
+          if (room.emptyTimeout) {
+            clearTimeout(room.emptyTimeout);
+            room.emptyTimeout = null;
+          }
+
           existingPlayer.ws = ws;
+          existingPlayer.isDisconnected = false;
           playerId = rId;
           playerRoomCode = code;
 
@@ -507,6 +513,16 @@ wss.on('connection', (ws) => {
             playerId: rId,
             playerName: existingPlayer.name
           }, ws);
+          break;
+        }
+
+        case 'LEAVE_ROOM': {
+          if (!playerRoomCode || !playerId) return;
+          const room = rooms.get(playerRoomCode);
+          if (room) {
+            handlePlayerLeave(room, playerId, true);
+          }
+          playerRoomCode = null;
           break;
         }
 
@@ -776,53 +792,129 @@ wss.on('connection', (ws) => {
     if (playerRoomCode && playerId) {
       const room = rooms.get(playerRoomCode);
       if (room) {
-        if (room.status === 'LOBBY') {
-          // Remove player from lobby
-          room.players = room.players.filter(p => p.id !== playerId);
-          if (room.players.length === 0) {
-            stopServerTurnTimer(room);
-            rooms.delete(playerRoomCode);
-          } else {
-            // Reassign host if host left
-            if (room.hostId === playerId) {
-              room.hostId = room.players[0].id;
-              room.players[0].isHost = true;
-            }
-            broadcastToRoom(playerRoomCode, {
-              type: 'PLAYER_LEFT',
-              playerId,
-              room: serializeRoom(room)
-            });
-          }
-        } else {
-          // In game: mark disconnected
-          const openPlayers = room.players.filter(p => p.ws && p.ws.readyState === WebSocket.OPEN && p.id !== playerId);
-          if (openPlayers.length === 0) {
-            stopServerTurnTimer(room);
-            rooms.delete(playerRoomCode);
-          }
-          if (room.status === 'FINISHED' && room.rematchVotes) {
-            room.rematchVotes.delete(playerId);
-            const remaining = room.players.filter(p => p.ws && p.ws.readyState === WebSocket.OPEN && p.id !== playerId);
-            broadcastToRoom(playerRoomCode, {
-              type: 'REMATCH_UPDATE',
-              playerId,
-              playerName: 'A player disconnected',
-              currentVotes: remaining.filter(p => room.rematchVotes.has(p.id)).length,
-              neededVotes: remaining.length,
-              readyPlayerIds: Array.from(room.rematchVotes),
-              playerLeft: true
-            });
-          }
-          broadcastToRoom(playerRoomCode, {
-            type: 'PLAYER_DISCONNECTED',
-            playerId
-          });
-        }
+        handlePlayerLeave(room, playerId, false);
       }
     }
   });
 });
+
+function handlePlayerLeave(room, playerId, isExplicitQuit) {
+  const player = room.players.find(p => p.id === playerId);
+  if (!player) return;
+
+  if (room.status === 'LOBBY') {
+    // Remove player from lobby
+    room.players = room.players.filter(p => p.id !== playerId);
+    if (room.players.length === 0) {
+      stopServerTurnTimer(room);
+      rooms.delete(room.code);
+    } else {
+      // Reassign host if host left
+      if (room.hostId === playerId) {
+        room.hostId = room.players[0].id;
+        room.players[0].isHost = true;
+      }
+      broadcastToRoom(room.code, {
+        type: 'PLAYER_LEFT',
+        playerId,
+        playerName: player.name,
+        room: serializeRoom(room)
+      });
+    }
+  } else if (room.status === 'PLAYING') {
+    if (isExplicitQuit) {
+      // Voluntary quit: player forfeits match
+      player.isEliminated = true;
+      player.isLeft = true;
+      player.ws = null;
+
+      // If it was this player's turn, advance to next player
+      const activePlayer = room.players[room.currentTurnIndex];
+      if (activePlayer && activePlayer.id === playerId) {
+        advanceRoomTurn(room);
+      }
+
+      // Check remaining active survivors
+      const survivors = room.players.filter(p => !p.isEliminated && !p.isLeft);
+
+      if (survivors.length === 1) {
+        // Sole survivor wins by default
+        room.status = 'FINISHED';
+        room.winner = serializePlayer(survivors[0]);
+        stopServerTurnTimer(room);
+
+        broadcastToRoom(room.code, {
+          type: 'PLAYER_LEFT',
+          playerId,
+          playerName: player.name,
+          isForfeit: true,
+          winner: room.winner,
+          room: serializeRoom(room)
+        });
+      } else if (survivors.length > 1) {
+        startServerTurnTimer(room.code);
+
+        broadcastToRoom(room.code, {
+          type: 'PLAYER_LEFT',
+          playerId,
+          playerName: player.name,
+          isForfeit: false,
+          nextPlayerId: room.players[room.currentTurnIndex] ? room.players[room.currentTurnIndex].id : null,
+          room: serializeRoom(room)
+        });
+      } else {
+        stopServerTurnTimer(room);
+        rooms.delete(room.code);
+      }
+    } else {
+      // Abrupt disconnect (browser reload, network drop)
+      player.isDisconnected = true;
+      const openPlayers = room.players.filter(p => p.ws && p.ws.readyState === WebSocket.OPEN && p.id !== playerId);
+
+      if (openPlayers.length === 0) {
+        if (!room.emptyTimeout) {
+          room.emptyTimeout = setTimeout(() => {
+            const cur = rooms.get(room.code);
+            if (cur) {
+              const active = cur.players.filter(p => p.ws && p.ws.readyState === WebSocket.OPEN);
+              if (active.length === 0) {
+                stopServerTurnTimer(cur);
+                rooms.delete(room.code);
+              }
+            }
+          }, 45000);
+        }
+      }
+
+      broadcastToRoom(room.code, {
+        type: 'PLAYER_DISCONNECTED',
+        playerId,
+        playerName: player.name
+      });
+    }
+  } else if (room.status === 'FINISHED') {
+    if (room.rematchVotes) {
+      room.rematchVotes.delete(playerId);
+      const remaining = room.players.filter(p => p.ws && p.ws.readyState === WebSocket.OPEN && p.id !== playerId);
+      broadcastToRoom(room.code, {
+        type: 'REMATCH_UPDATE',
+        playerId,
+        playerName: `${player.name} left the room`,
+        currentVotes: remaining.filter(p => room.rematchVotes.has(p.id)).length,
+        neededVotes: remaining.length,
+        readyPlayerIds: Array.from(room.rematchVotes),
+        playerLeft: true
+      });
+    }
+
+    broadcastToRoom(room.code, {
+      type: 'PLAYER_LEFT',
+      playerId,
+      playerName: player.name,
+      room: serializeRoom(room)
+    });
+  }
+}
 
 // Helper serializers (exclude ws reference)
 function serializePlayer(p) {
@@ -833,7 +925,8 @@ function serializePlayer(p) {
     color: PLAYER_COLORS[p.colorId] || PLAYER_COLORS[0],
     isHost: p.isHost,
     isReady: p.isReady,
-    isEliminated: p.isEliminated
+    isEliminated: p.isEliminated,
+    isDisconnected: !!p.isDisconnected
   };
 }
 

@@ -1070,6 +1070,11 @@ html, body {
   text-decoration: line-through;
 }
 
+.player-badge.disconnected {
+  opacity: 0.55;
+  border-style: dashed !important;
+}
+
 .badge-count {
   font-family: var(--font-display);
   font-weight: 800;

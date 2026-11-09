@@ -75,6 +75,118 @@ document.addEventListener('DOMContentLoaded', () => {
     }, duration);
   }
 
+  // --- SESSION PERSISTENCE (SURVIVE BROWSER REFRESH / RELOAD) ---
+  function saveSession() {
+    try {
+      if (gameMode === 'LOCAL' || gameMode === 'AI') {
+        if (engine && !engine.isGameOver) {
+          const session = {
+            mode: gameMode,
+            turnTimer: currentTurnTimer,
+            aiDifficulty: aiOpponent ? aiOpponent.difficulty : 'medium',
+            engineState: {
+              rows: engine.rows,
+              cols: engine.cols,
+              players: engine.players,
+              board: engine.board,
+              currentPlayerIndex: engine.currentPlayerIndex,
+              roundsPlayed: engine.roundsPlayed,
+              isGameOver: engine.isGameOver,
+              winner: engine.winner
+            }
+          };
+          sessionStorage.setItem('cr_active_session', JSON.stringify(session));
+        }
+      } else if (gameMode === 'ONLINE' || gameMode === 'LAN') {
+        if (window.networkClient && window.networkClient.roomCode && myPlayerId) {
+          const session = {
+            mode: gameMode,
+            roomCode: window.networkClient.roomCode,
+            playerId: myPlayerId,
+            serverUrl: currentServerUrl,
+            turnTimer: currentTurnTimer
+          };
+          sessionStorage.setItem('cr_active_session', JSON.stringify(session));
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to save session:', e);
+    }
+  }
+
+  function clearSession() {
+    try {
+      sessionStorage.removeItem('cr_active_session');
+    } catch (e) {}
+  }
+
+  async function restoreActiveSession() {
+    const raw = sessionStorage.getItem('cr_active_session');
+    if (!raw) return;
+
+    try {
+      const saved = JSON.parse(raw);
+      if (!saved || !saved.mode) return;
+
+      if (saved.mode === 'LOCAL' || saved.mode === 'AI') {
+        const s = saved.engineState;
+        if (!s || s.isGameOver) {
+          clearSession();
+          return;
+        }
+
+        gameMode = saved.mode;
+        currentTurnTimer = saved.turnTimer !== undefined ? saved.turnTimer : 20;
+
+        if (gameMode === 'AI') {
+          aiOpponent = new ChainReactionAI(saved.aiDifficulty || 'medium');
+        }
+
+        engine = new ChainReactionEngine(s.rows, s.cols, s.players);
+        engine.board = s.board;
+        engine.currentPlayerIndex = s.currentPlayerIndex;
+        engine.roundsPlayed = s.roundsPlayed;
+        engine.isGameOver = s.isGameOver;
+        engine.winner = s.winner;
+
+        renderer.setEngine(engine);
+        myPlayerId = null;
+        document.getElementById('btn-undo').style.display = (gameMode === 'LOCAL' ? 'inline-block' : 'none');
+
+        showScreen('game');
+        updateHud();
+        startTurnTimer(currentTurnTimer);
+        showToast('Resumed active game.');
+        checkAiTurn();
+      } else if (saved.mode === 'ONLINE' || saved.mode === 'LAN') {
+        if (!saved.roomCode || !saved.playerId) {
+          clearSession();
+          return;
+        }
+
+        gameMode = saved.mode;
+        myPlayerId = saved.playerId;
+        currentTurnTimer = saved.turnTimer !== undefined ? saved.turnTimer : 20;
+        const targetUrl = saved.serverUrl || currentServerUrl;
+
+        showToast(`Reconnecting to room (${saved.roomCode})...`, 4000);
+
+        try {
+          await window.networkClient.connect(targetUrl);
+          window.networkClient.reconnect(saved.roomCode, saved.playerId);
+        } catch (err) {
+          console.warn('Auto-reconnect failed:', err);
+          clearSession();
+          showToast('Could not reconnect to previous room.');
+          showScreen('menu');
+        }
+      }
+    } catch (e) {
+      console.error('Failed to restore session:', e);
+      clearSession();
+    }
+  }
+
   // --- MENU NAVIGATION ---
   document.getElementById('btn-mode-local').onclick = () => showScreen('setupLocal');
   document.getElementById('btn-mode-ai').onclick = () => showScreen('setupAi');
@@ -130,6 +242,10 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.btn-back').forEach(btn => {
     btn.onclick = () => {
       window.soundManager.play('click');
+      clearSession();
+      if (window.networkClient && window.networkClient.isConnected) {
+        window.networkClient.leaveRoom();
+      }
       window.networkClient.disconnect();
       showScreen('menu');
     };
@@ -223,6 +339,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateHud();
     startTurnTimer(currentTurnTimer);
     checkAiTurn();
+    saveSession();
   }
 
   // --- 3. LAN MULTIPLAYER SETUP ---
@@ -322,6 +439,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupLobbyUI(data.room, true);
     showScreen('lobby');
     showToast(`Room Created! Code: ${data.roomCode}`);
+    saveSession();
   });
 
   window.networkClient.on('room_joined', (data) => {
@@ -329,6 +447,42 @@ document.addEventListener('DOMContentLoaded', () => {
     setupLobbyUI(data.room, false);
     showScreen('lobby');
     showToast(`Joined Room: ${data.roomCode}!`);
+    saveSession();
+  });
+
+  window.networkClient.on('reconnected', (data) => {
+    myPlayerId = data.playerId;
+    const room = data.room;
+    if (!room) return;
+
+    saveSession();
+
+    if (room.status === 'LOBBY') {
+      setupLobbyUI(room, room.hostId === myPlayerId);
+      showScreen('lobby');
+      showToast(`Reconnected to Lobby (${room.code})!`);
+    } else if (room.status === 'PLAYING') {
+      engine = new ChainReactionEngine(room.gridSize.rows, room.gridSize.cols, room.players);
+      engine.board = room.board;
+      if (room.currentTurnPlayerId) {
+        const idx = engine.players.findIndex(p => p.id === room.currentTurnPlayerId);
+        if (idx !== -1) engine.currentPlayerIndex = idx;
+      }
+      renderer.setEngine(engine);
+      document.getElementById('btn-undo').style.display = 'none';
+      currentTurnTimer = room.turnTimer !== undefined ? room.turnTimer : 20;
+      showScreen('game');
+      updateHud();
+      startTurnTimer(currentTurnTimer);
+      showToast(`Reconnected to Match (${room.code})!`);
+    } else if (room.status === 'FINISHED') {
+      engine = new ChainReactionEngine(room.gridSize.rows, room.gridSize.cols, room.players);
+      engine.board = room.board;
+      renderer.setEngine(engine);
+      showScreen('game');
+      updateHud();
+      showGameOver(room.winner);
+    }
   });
 
   window.networkClient.on('player_joined', (data) => {
@@ -338,8 +492,55 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   window.networkClient.on('player_left', (data) => {
-    setupLobbyUI(data.room, window.networkClient.isHost);
-    showToast('A player left the room.');
+    window.soundManager.play('beep', { pitch: 0.4 });
+    window.soundManager.vibrate([100, 50, 100]);
+
+    if (data.isForfeit && data.winner) {
+      showToast(`🚪 ${data.playerName || 'Opponent'} left the game! ${data.winner.name} wins by forfeit!`, 5000);
+      showGameOver(data.winner);
+    } else {
+      showToast(`🚪 ${data.playerName || 'A player'} has left the game.`, 4000);
+
+      if (engine && data.playerId) {
+        const leaving = engine.players.find(p => p.id === data.playerId);
+        if (leaving) leaving.isEliminated = true;
+      }
+
+      if (data.nextPlayerId && engine) {
+        const idx = engine.players.findIndex(p => p.id === data.nextPlayerId);
+        if (idx !== -1) engine.currentPlayerIndex = idx;
+        updateHud();
+        startTurnTimer(currentTurnTimer);
+      } else if (engine) {
+        updateHud();
+      }
+    }
+
+    if (data.room && data.room.status === 'LOBBY') {
+      setupLobbyUI(data.room, window.networkClient.isHost);
+    }
+  });
+
+  window.networkClient.on('player_disconnected', (data) => {
+    window.soundManager.play('beep', { pitch: 0.5 });
+    showToast(`⚠️ ${data.playerName || 'A player'} disconnected (waiting for reconnect)...`, 3500);
+
+    if (engine && data.playerId) {
+      const p = engine.players.find(pl => pl.id === data.playerId);
+      if (p) p.isDisconnected = true;
+      updateHud();
+    }
+  });
+
+  window.networkClient.on('player_reconnected', (data) => {
+    window.soundManager.play('beep', { pitch: 1.2 });
+    showToast(`🟢 ${data.playerName || 'A player'} reconnected!`, 3000);
+
+    if (engine && data.playerId) {
+      const p = engine.players.find(pl => pl.id === data.playerId);
+      if (p) p.isDisconnected = false;
+      updateHud();
+    }
   });
 
   window.networkClient.on('settings_updated', (data) => {
@@ -386,6 +587,7 @@ document.addEventListener('DOMContentLoaded', () => {
     showScreen('game');
     updateHud();
     startTurnTimer(currentTurnTimer);
+    saveSession();
   });
 
   window.networkClient.on('move_result', (data) => {
@@ -415,6 +617,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         updateHud();
         startTurnTimer(currentTurnTimer);
+        saveSession();
       }
     });
   });
@@ -434,9 +637,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     updateHud();
     startTurnTimer(currentTurnTimer);
+    saveSession();
   });
 
   window.networkClient.on('error', (err) => {
+    if (err.message && (err.message.includes('Room no longer exists') || err.message.includes('Player not found'))) {
+      clearSession();
+      showScreen('menu');
+    }
     showToast(err.message);
   });
 
@@ -611,6 +819,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateHud();
         startTurnTimer(currentTurnTimer);
         checkAiTurn();
+        saveSession();
       }
     });
   }
@@ -652,11 +861,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const count = counts[p.id] || 0;
 
       const badge = document.createElement('div');
-      badge.className = `player-badge ${p.isEliminated ? 'eliminated' : ''} ${p.id === current.id ? 'active' : ''}`;
+      badge.className = `player-badge ${p.isEliminated ? 'eliminated' : ''} ${p.isDisconnected ? 'disconnected' : ''} ${p.id === current.id ? 'active' : ''}`;
       badge.style.borderColor = pColor.hex;
       badge.innerHTML = `
         <span class="badge-dot" style="background-color: ${pColor.hex}"></span>
-        <span class="badge-name">${p.name}</span>
+        <span class="badge-name">${p.name}${p.isDisconnected ? ' (Offline)' : ''}</span>
         <span class="badge-count">${count}</span>
       `;
       scoreContainer.appendChild(badge);
@@ -746,6 +955,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- GAME OVER MODAL ---
   function showGameOver(winner) {
     clearInterval(turnTimerId);
+    clearSession();
     window.soundManager.play('laser2');
     window.soundManager.vibrate(200);
     hasRequestedRematch = false;
@@ -800,6 +1010,7 @@ document.addEventListener('DOMContentLoaded', () => {
       updateHud();
       startTurnTimer(currentTurnTimer);
       checkAiTurn();
+      saveSession();
     }
   };
 
@@ -822,6 +1033,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('btn-gameover-menu').onclick = () => {
     document.getElementById('modal-gameover').classList.remove('active');
+    clearSession();
+    if (gameMode === 'ONLINE' || gameMode === 'LAN') {
+      window.networkClient.leaveRoom();
+    }
     window.networkClient.disconnect();
     showScreen('menu');
   };
@@ -845,6 +1060,10 @@ document.addEventListener('DOMContentLoaded', () => {
     window.soundManager.play('click');
     if (quitModal) quitModal.classList.remove('active');
     clearInterval(turnTimerId);
+    clearSession();
+    if (gameMode === 'ONLINE' || gameMode === 'LAN') {
+      window.networkClient.leaveRoom();
+    }
     window.networkClient.disconnect();
     if (engine) {
       engine.isGameOver = true;
@@ -880,6 +1099,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderer.setEngine(engine);
         updateHud();
         startTurnTimer(currentTurnTimer);
+        saveSession();
       }
     }
   };
@@ -894,6 +1114,7 @@ document.addEventListener('DOMContentLoaded', () => {
           renderer.setEngine(engine);
           updateHud();
           startTurnTimer(currentTurnTimer);
+          saveSession();
         }
       }
     } else if (e.key === 'Escape' || e.key === 'q' || e.key === 'Q') {
@@ -912,4 +1133,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
   });
+
+  // Restore active session if page was refreshed
+  restoreActiveSession();
 });
