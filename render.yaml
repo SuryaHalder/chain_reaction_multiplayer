@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: chain-reaction-server
+    runtime: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: node server.js
+    plan: free
+    autoDeploy: true
