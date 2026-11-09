@@ -491,6 +491,14 @@ wss.on('connection', (ws) => {
             return;
           }
 
+          // Clean up any stale previous socket for this player to prevent stale close events
+          if (existingPlayer.ws && existingPlayer.ws !== ws) {
+            try {
+              existingPlayer.ws.removeAllListeners('close');
+              existingPlayer.ws.close();
+            } catch (e) {}
+          }
+
           if (room.emptyTimeout) {
             clearTimeout(room.emptyTimeout);
             room.emptyTimeout = null;
@@ -792,7 +800,12 @@ wss.on('connection', (ws) => {
     if (playerRoomCode && playerId) {
       const room = rooms.get(playerRoomCode);
       if (room) {
-        handlePlayerLeave(room, playerId, false);
+        const player = room.players.find(p => p.id === playerId);
+        // Only trigger disconnect if this closing socket is STILL the player's active socket
+        if (player && player.ws === ws) {
+          player.ws = null;
+          handlePlayerLeave(room, playerId, false);
+        }
       }
     }
   });
@@ -801,6 +814,11 @@ wss.on('connection', (ws) => {
 function handlePlayerLeave(room, playerId, isExplicitQuit) {
   const player = room.players.find(p => p.id === playerId);
   if (!player) return;
+
+  // If this is an unexpected disconnect, but the player has already reconnected with an OPEN socket, ignore
+  if (!isExplicitQuit && player.ws && player.ws.readyState === WebSocket.OPEN) {
+    return;
+  }
 
   if (room.status === 'LOBBY') {
     // Remove player from lobby

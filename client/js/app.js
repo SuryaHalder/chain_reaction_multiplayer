@@ -478,7 +478,17 @@ document.addEventListener('DOMContentLoaded', () => {
     if (recModal) recModal.classList.remove('active');
 
     const banner = document.getElementById('hud-reconnect-banner');
-    if (banner) banner.style.display = 'none';
+    const otherDisconnected = (room.players || []).find(p => p.id !== myPlayerId && p.isDisconnected);
+    if (banner) {
+      if (otherDisconnected) {
+        banner.className = 'hud-alert-banner';
+        const msg = document.getElementById('hud-reconnect-msg');
+        if (msg) msg.innerText = `⚠️ ${otherDisconnected.name} left, waiting for rejoin...`;
+        banner.style.display = 'flex';
+      } else {
+        banner.style.display = 'none';
+      }
+    }
 
     saveSession();
 
@@ -550,6 +560,9 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   window.networkClient.on('player_disconnected', (data) => {
+    // If this disconnect event is for the local player, ignore it
+    if (data.playerId === myPlayerId) return;
+
     window.soundManager.play('beep', { pitch: 0.5 });
     const pName = data.playerName || 'Player';
     showToast(`⚠️ ${pName} left, waiting for rejoin...`, 5000);
@@ -570,6 +583,12 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   window.networkClient.on('player_reconnected', (data) => {
+    if (data.playerId === myPlayerId) {
+      const banner = document.getElementById('hud-reconnect-banner');
+      if (banner) banner.style.display = 'none';
+      return;
+    }
+
     window.soundManager.play('beep', { pitch: 1.2 });
     const pName = data.playerName || 'Player';
     showToast(`🟢 ${pName} rejoined the match!`, 3000);
@@ -582,7 +601,7 @@ document.addEventListener('DOMContentLoaded', () => {
       banner.style.display = 'flex';
       setTimeout(() => {
         banner.style.display = 'none';
-      }, 3500);
+      }, 3000);
     }
 
     if (engine && data.playerId) {
@@ -640,6 +659,10 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   window.networkClient.on('move_result', (data) => {
+    // Dismiss any reconnect banner once a move occurs
+    const banner = document.getElementById('hud-reconnect-banner');
+    if (banner) banner.style.display = 'none';
+
     // Execute incoming move animation wave-by-wave
     const waves = data.waves || data.steps || [];
     renderer.enqueueWaves(waves, data.board, () => {
