@@ -183,6 +183,12 @@ class NetworkClient {
     });
   }
 
+  requestRematch() {
+    this.send({
+      action: 'REQUEST_REMATCH'
+    });
+  }
+
   handleServerMessage(msg) {
     switch (msg.type) {
       case 'ROOM_CREATED':
@@ -227,6 +233,10 @@ class NetworkClient {
 
       case 'GAME_STARTED':
         this.emitEvent('game_started', msg);
+        break;
+
+      case 'REMATCH_UPDATE':
+        this.emitEvent('rematch_update', msg);
         break;
 
       case 'MOVE_RESULT':

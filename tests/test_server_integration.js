@@ -166,6 +166,86 @@ async function runTest() {
   }
   console.log('  Move 4 verified: Player 2 corner explosion resolved');
 
+  // --- TEST MUTUAL REMATCH CONSENT FLOW ---
+  console.log('\nTesting Mutual Rematch Consent Flow...');
+
+  // Create a fast 2-player game where Player 1 captures Player 2 to trigger Game Over
+  ws1.send(JSON.stringify({
+    action: 'CREATE_ROOM',
+    playerName: 'Alice_Rematch',
+    gridSize: { rows: 3, cols: 3 },
+    maxPlayers: 2
+  }));
+
+  await wait(200);
+  const rematchRoomMsg = p1Messages.filter(m => m.type === 'ROOM_CREATED').pop();
+  const rCode = rematchRoomMsg.roomCode;
+  const p1RematchId = rematchRoomMsg.playerId;
+
+  // Player 2 joins
+  ws2.send(JSON.stringify({
+    action: 'JOIN_ROOM',
+    roomCode: rCode,
+    playerName: 'Bob_Rematch'
+  }));
+
+  await wait(200);
+  const p2RematchMsg = p2Messages.filter(m => m.type === 'ROOM_JOINED').pop();
+  const p2RematchId = p2RematchMsg.playerId;
+
+  // Ready and Start
+  ws2.send(JSON.stringify({ action: 'TOGGLE_READY' }));
+  await wait(100);
+  ws1.send(JSON.stringify({ action: 'START_GAME' }));
+  await wait(200);
+
+  // Turn 1: Player 1 places at corner (0,0) [count 1]
+  ws1.send(JSON.stringify({ action: 'MAKE_MOVE', row: 0, col: 0 }));
+  await wait(150);
+
+  // Turn 2: Player 2 places at adjacent edge (0,1) [count 1]
+  ws2.send(JSON.stringify({ action: 'MAKE_MOVE', row: 0, col: 1 }));
+  await wait(150);
+
+  // Turn 3: Player 1 places at corner (0,0) again -> EXPLODES!
+  // Projectile lands on (0,1), capturing Player 2's only orb!
+  // Player 2 has played first turn and now has 0 orbs -> Player 2 ELIMINATED!
+  // Player 1 wins, isGameOver: true!
+  ws1.send(JSON.stringify({ action: 'MAKE_MOVE', row: 0, col: 0 }));
+  await wait(250);
+
+  const gameOverMove = p1Messages.filter(m => m.type === 'MOVE_RESULT').pop();
+  if (!gameOverMove || !gameOverMove.isGameOver || gameOverMove.winner.id !== p1RematchId) {
+    throw new Error('Expected Game Over with Player 1 victory');
+  }
+  console.log('  Game Over reached: Player 1 won, Player 2 eliminated');
+
+  // Rematch Step 1: Only Player 1 requests rematch
+  ws1.send(JSON.stringify({ action: 'REQUEST_REMATCH' }));
+  await wait(200);
+
+  const rematchUpdate1 = p2Messages.filter(m => m.type === 'REMATCH_UPDATE').pop();
+  if (!rematchUpdate1 || rematchUpdate1.currentVotes !== 1 || rematchUpdate1.neededVotes !== 2) {
+    throw new Error(`Expected 1/2 rematch votes, got ${rematchUpdate1?.currentVotes}/${rematchUpdate1?.neededVotes}`);
+  }
+  console.log('  Rematch Step 1 verified: Player 1 voted (1/2). Game has NOT restarted yet.');
+
+  // Verify that game has NOT started yet
+  const prematureStart = p1Messages.filter(m => m.type === 'GAME_STARTED' && m.isRematch);
+  if (prematureStart.length > 0) {
+    throw new Error('Game restarted prematurely before Player 2 agreed!');
+  }
+
+  // Rematch Step 2: Player 2 also requests rematch (Mutual Agreement reached!)
+  ws2.send(JSON.stringify({ action: 'REQUEST_REMATCH' }));
+  await wait(250);
+
+  const rematchStartedMsg = p1Messages.filter(m => m.type === 'GAME_STARTED' && m.isRematch).pop();
+  if (!rematchStartedMsg) {
+    throw new Error('Expected GAME_STARTED with isRematch=true after both agreed');
+  }
+  console.log('  Rematch Step 2 verified: Both agreed (2/2)! Rematch successfully started for all players!');
+
   ws1.close();
   ws2.close();
   console.log('\n>>> ALL SERVER INTEGRATION TESTS PASSED PERFECTLY! <<<');

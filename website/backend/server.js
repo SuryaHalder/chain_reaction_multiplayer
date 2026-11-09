@@ -353,7 +353,8 @@ wss.on('connection', (ws) => {
             board: null,
             currentTurnIndex: 0,
             turnExpiresAt: null,
-            winner: null
+            winner: null,
+            rematchVotes: new Set()
           };
 
           rooms.set(code, room);
@@ -621,6 +622,54 @@ wss.on('connection', (ws) => {
           break;
         }
 
+        case 'REQUEST_REMATCH': {
+          const room = rooms.get(playerRoomCode);
+          if (!room || room.status !== 'FINISHED') return;
+
+          if (!room.rematchVotes) {
+            room.rematchVotes = new Set();
+          }
+
+          room.rematchVotes.add(playerId);
+
+          const requestingPlayer = room.players.find(p => p.id === playerId);
+          const connectedPlayers = room.players.filter(p => p.ws && p.ws.readyState === WebSocket.OPEN);
+          const neededVotes = connectedPlayers.length;
+          const currentVotes = connectedPlayers.filter(p => room.rematchVotes.has(p.id)).length;
+          const readyPlayerIds = Array.from(room.rematchVotes);
+
+          // Broadcast rematch update to all players
+          broadcastToRoom(playerRoomCode, {
+            type: 'REMATCH_UPDATE',
+            playerId,
+            playerName: requestingPlayer ? requestingPlayer.name : 'A player',
+            currentVotes,
+            neededVotes,
+            readyPlayerIds
+          });
+
+          // If all connected players agree (minimum 2 players), start the rematch!
+          if (currentVotes >= neededVotes && neededVotes >= 2) {
+            room.status = 'PLAYING';
+            room.board = createEmptyBoard(room.gridSize.rows, room.gridSize.cols);
+            room.currentTurnIndex = 0;
+            room.winner = null;
+            room.rematchVotes.clear();
+
+            for (const p of room.players) {
+              p.isEliminated = false;
+              p.hasPlayedFirstTurn = false;
+            }
+
+            broadcastToRoom(playerRoomCode, {
+              type: 'GAME_STARTED',
+              room: serializeRoom(room),
+              isRematch: true
+            });
+          }
+          break;
+        }
+
         case 'RESTART_GAME': {
           const room = rooms.get(playerRoomCode);
           if (!room || room.hostId !== playerId) return;
@@ -629,6 +678,7 @@ wss.on('connection', (ws) => {
           room.board = createEmptyBoard(room.gridSize.rows, room.gridSize.cols);
           room.currentTurnIndex = 0;
           room.winner = null;
+          if (room.rematchVotes) room.rematchVotes.clear();
 
           for (const p of room.players) {
             p.isEliminated = false;
@@ -692,6 +742,19 @@ wss.on('connection', (ws) => {
           }
         } else {
           // In game: mark disconnected
+          if (room.status === 'FINISHED' && room.rematchVotes) {
+            room.rematchVotes.delete(playerId);
+            const remaining = room.players.filter(p => p.ws && p.ws.readyState === WebSocket.OPEN && p.id !== playerId);
+            broadcastToRoom(playerRoomCode, {
+              type: 'REMATCH_UPDATE',
+              playerId,
+              playerName: 'A player disconnected',
+              currentVotes: remaining.filter(p => room.rematchVotes.has(p.id)).length,
+              neededVotes: remaining.length,
+              readyPlayerIds: Array.from(room.rematchVotes),
+              playerLeft: true
+            });
+          }
           broadcastToRoom(playerRoomCode, {
             type: 'PLAYER_DISCONNECTED',
             playerId

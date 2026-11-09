@@ -1,6 +1,8 @@
 /**
- * Chain Reaction Web Network Client
- * Handles real-time WebSockets for online rooms & LAN.
+ * Chain Reaction Network Client
+ * Handles WebSocket communication for both:
+ * 1. LAN Multiplayer (Local Wi-Fi / Hotspot)
+ * 2. Online Multiplayer (Global Room ID over WebSockets)
  */
 
 class NetworkClient {
@@ -12,6 +14,8 @@ class NetworkClient {
     this.isHost = false;
     this.isConnected = false;
     this.pingInterval = null;
+
+    // Event callbacks
     this.callbacks = {};
   }
 
@@ -29,6 +33,7 @@ class NetworkClient {
     return new Promise((resolve, reject) => {
       this.disconnect();
 
+      // Normalize ws/wss URL
       let url = serverUrl.trim();
       if (!url.startsWith('ws://') && !url.startsWith('wss://')) {
         const isHttps = window.location.protocol === 'https:';
@@ -46,9 +51,9 @@ class NetworkClient {
       const connectionTimeout = setTimeout(() => {
         if (!this.isConnected) {
           this.disconnect();
-          reject(new Error('Connection timed out. Render free tier may be waking up (takes ~30s). Please try again!'));
+          reject(new Error('Connection timed out. Check server URL or Wi-Fi connection.'));
         }
-      }, 10000);
+      }, 7000);
 
       this.ws.onopen = () => {
         clearTimeout(connectionTimeout);
@@ -68,7 +73,7 @@ class NetworkClient {
 
       this.ws.onerror = (err) => {
         clearTimeout(connectionTimeout);
-        this.emitEvent('error', { message: 'Network connection error. Server might be waking up.' });
+        this.emitEvent('error', { message: 'Network connection error.' });
       };
 
       this.ws.onclose = () => {
@@ -178,6 +183,12 @@ class NetworkClient {
     });
   }
 
+  requestRematch() {
+    this.send({
+      action: 'REQUEST_REMATCH'
+    });
+  }
+
   handleServerMessage(msg) {
     switch (msg.type) {
       case 'ROOM_CREATED':
@@ -186,41 +197,56 @@ class NetworkClient {
         this.isHost = true;
         this.emitEvent('room_created', msg);
         break;
+
       case 'ROOM_JOINED':
         this.roomCode = msg.roomCode;
         this.playerId = msg.playerId;
         this.isHost = false;
         this.emitEvent('room_joined', msg);
         break;
+
       case 'RECONNECTED':
         this.roomCode = msg.roomCode;
         this.playerId = msg.playerId;
         this.emitEvent('reconnected', msg);
         break;
+
       case 'PLAYER_JOINED':
         this.emitEvent('player_joined', msg);
         break;
+
       case 'PLAYER_LEFT':
         this.emitEvent('player_left', msg);
         break;
+
       case 'SETTINGS_UPDATED':
         this.emitEvent('settings_updated', msg);
         break;
+
       case 'COLOR_CHANGED':
         this.emitEvent('color_changed', msg);
         break;
+
       case 'READY_CHANGED':
         this.emitEvent('ready_changed', msg);
         break;
+
       case 'GAME_STARTED':
         this.emitEvent('game_started', msg);
         break;
+
+      case 'REMATCH_UPDATE':
+        this.emitEvent('rematch_update', msg);
+        break;
+
       case 'MOVE_RESULT':
         this.emitEvent('move_result', msg);
         break;
+
       case 'PLAYER_DISCONNECTED':
         this.emitEvent('player_disconnected', msg);
         break;
+
       case 'ERROR':
         this.emitEvent('error', msg);
         break;

@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupAi: document.getElementById('screen-setup-ai'),
     setupLan: document.getElementById('screen-setup-lan'),
     setupOnline: document.getElementById('screen-setup-online'),
+    rules: document.getElementById('screen-rules'),
     lobby: document.getElementById('screen-lobby'),
     game: document.getElementById('screen-game'),
     settings: document.getElementById('modal-settings')
@@ -21,6 +22,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const renderer = new CanvasRenderer(canvas);
   let engine = null;
   let aiOpponent = null;
+  let rulesDemo = null;
+  if (window.RulesDemoController) {
+    rulesDemo = new RulesDemoController('rules-demo-canvas');
+  }
 
   // State
   let gameMode = 'LOCAL'; // LOCAL, AI, LAN, ONLINE
@@ -70,12 +75,52 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-mode-local').onclick = () => showScreen('setupLocal');
   document.getElementById('btn-mode-ai').onclick = () => showScreen('setupAi');
   document.getElementById('btn-mode-lan').onclick = () => {
-    // Show current LAN IPs if available from server
     fetchLanInfo();
     showScreen('setupLan');
   };
   document.getElementById('btn-mode-online').onclick = () => showScreen('setupOnline');
   document.getElementById('btn-settings').onclick = () => screens.settings.classList.add('active');
+
+  // Rules screen
+  document.getElementById('btn-rules').onclick = () => {
+    window.soundManager.play('click');
+    showScreen('rules');
+    if (rulesDemo) {
+      setTimeout(() => {
+        rulesDemo.initCanvas();
+        rulesDemo.playScenario('corner');
+      }, 50);
+    }
+  };
+
+  // Rules interactive demo tab switches
+  const demoTabCorner = document.getElementById('btn-demo-corner');
+  const demoTabEdge = document.getElementById('btn-demo-edge');
+  const demoTabCascade = document.getElementById('btn-demo-cascade');
+  const btnReplay = document.getElementById('btn-replay-demo');
+
+  function setDemoTab(tab, scenario) {
+    [demoTabCorner, demoTabEdge, demoTabCascade].forEach(t => t && t.classList.remove('active'));
+    if (tab) tab.classList.add('active');
+    if (rulesDemo) rulesDemo.playScenario(scenario);
+  }
+
+  if (demoTabCorner) demoTabCorner.onclick = () => setDemoTab(demoTabCorner, 'corner');
+  if (demoTabEdge) demoTabEdge.onclick = () => setDemoTab(demoTabEdge, 'edge');
+  if (demoTabCascade) demoTabCascade.onclick = () => setDemoTab(demoTabCascade, 'cascade');
+  if (btnReplay) btnReplay.onclick = () => {
+    if (rulesDemo) rulesDemo.playScenario(rulesDemo.currentScenario);
+  };
+
+  // Local player count pill selector
+  document.querySelectorAll('#local-player-pills .pill-btn').forEach(btn => {
+    btn.onclick = () => {
+      window.soundManager.play('click');
+      document.querySelectorAll('#local-player-pills .pill-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('local-player-count').value = btn.dataset.val;
+    };
+  });
 
   // Back buttons
   document.querySelectorAll('.btn-back').forEach(btn => {
@@ -308,6 +353,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   window.networkClient.on('game_started', (data) => {
+    document.getElementById('modal-gameover').classList.remove('active');
+    hasRequestedRematch = false;
     window.soundManager.play('laser');
     const room = data.room;
     engine = new ChainReactionEngine(room.gridSize.rows, room.gridSize.cols, room.players);
@@ -583,11 +630,31 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 1000);
   }
 
+  let hasRequestedRematch = false;
+
+  function renderRematchChips(readyPlayerIds = []) {
+    const list = document.getElementById('rematch-players-list');
+    if (!list || !engine) return;
+    list.innerHTML = '';
+
+    engine.players.forEach(p => {
+      const isReady = (readyPlayerIds || []).includes(p.id);
+      const chip = document.createElement('div');
+      chip.className = `rematch-chip ${isReady ? 'agreed' : 'waiting'}`;
+      chip.innerHTML = `
+        <span>${p.name} ${p.id === myPlayerId ? '(You)' : ''}</span>
+        <span>${isReady ? '🟢 Agreed' : '⏳ Waiting...'}</span>
+      `;
+      list.appendChild(chip);
+    });
+  }
+
   // --- GAME OVER MODAL ---
   function showGameOver(winner) {
     clearInterval(turnTimerId);
     window.soundManager.play('laser2');
     window.soundManager.vibrate(200);
+    hasRequestedRematch = false;
 
     const modal = document.getElementById('modal-gameover');
     const winnerText = document.getElementById('gameover-winner-text');
@@ -602,24 +669,61 @@ document.addEventListener('DOMContentLoaded', () => {
       winnerText.style.color = '#ffffff';
     }
 
+    const rematchBox = document.getElementById('rematch-status-box');
+    const btnPlayAgain = document.getElementById('btn-play-again');
+    btnPlayAgain.disabled = false;
+    btnPlayAgain.style.opacity = '1';
+
+    if (gameMode === 'ONLINE' || gameMode === 'LAN') {
+      rematchBox.style.display = 'block';
+      btnPlayAgain.innerText = 'Agree to Rematch';
+      renderRematchChips([]);
+      const connectedCount = engine ? engine.players.length : 2;
+      document.getElementById('rematch-count').innerText = `0/${connectedCount} Agreed`;
+    } else {
+      rematchBox.style.display = 'none';
+      btnPlayAgain.innerText = 'Play Again';
+    }
+
     modal.classList.add('active');
   }
 
   document.getElementById('btn-play-again').onclick = () => {
-    document.getElementById('modal-gameover').classList.remove('active');
+    window.soundManager.play('click');
     if (gameMode === 'ONLINE' || gameMode === 'LAN') {
-      if (window.networkClient.isHost) {
-        window.networkClient.restartGame();
-      } else {
-        showToast('Waiting for host to restart...');
+      if (!hasRequestedRematch) {
+        hasRequestedRematch = true;
+        window.networkClient.requestRematch();
+        const btn = document.getElementById('btn-play-again');
+        btn.innerText = 'Waiting for Opponent... ⏳';
+        btn.style.opacity = '0.7';
+        btn.disabled = true;
       }
     } else {
+      document.getElementById('modal-gameover').classList.remove('active');
       engine.initBoard();
       renderer.setEngine(engine);
       updateHud();
       checkAiTurn();
     }
   };
+
+  window.networkClient.on('rematch_update', (data) => {
+    const counter = document.getElementById('rematch-count');
+    if (counter) {
+      counter.innerText = `${data.currentVotes}/${data.neededVotes} Agreed`;
+    }
+    renderRematchChips(data.readyPlayerIds);
+
+    if (data.playerId !== myPlayerId && !hasRequestedRematch) {
+      showToast(`${data.playerName} wants a rematch! Click Agree to play.`);
+      window.soundManager.play('beep');
+    }
+
+    if (data.playerLeft) {
+      showToast('A player left the room.');
+    }
+  });
 
   document.getElementById('btn-gameover-menu').onclick = () => {
     document.getElementById('modal-gameover').classList.remove('active');

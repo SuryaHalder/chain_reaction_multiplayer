@@ -3,69 +3,202 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Chain Reaction Online Multiplayer</title>
+  <title>Chain Reaction Multiplayer</title>
+  
+  <!-- Premium Gaming Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;600;700;800&display=swap" rel="stylesheet">
+  
   <link rel="stylesheet" href="style.css">
   <link rel="icon" href="assets/icon.png">
 </head>
 <body>
 
-  <div id="web-app-container">
-    <!-- SCREEN 1: MAIN MENU -->
-    <div id="screen-menu" class="screen active">
+  <!-- AMBIENT BACKGROUND GLOWS -->
+  <div class="ambient-glow glow-top"></div>
+  <div class="ambient-glow glow-bottom"></div>
+
+  <!-- SCREEN 1: MAIN MENU -->
+  <div id="screen-menu" class="screen active">
+    <div class="menu-container">
       <div class="app-header">
-        <img src="assets/icon.png" alt="Chain Reaction" class="app-logo-img">
+        <div class="logo-wrapper">
+          <img src="assets/icon.png" alt="Chain Reaction Logo" class="app-logo-img">
+        </div>
         <h1 class="app-title">Chain Reaction</h1>
-        <p class="app-subtitle">Online &amp; LAN Web Edition</p>
+        <div class="app-badge-row">
+          <span class="badge-pill live-pill">● LIVE MULTIPLAYER</span>
+          <span class="badge-pill">TACTICAL STRATEGY</span>
+        </div>
       </div>
 
       <div class="menu-options">
-        <button id="btn-mode-online" class="btn-menu secondary">
-          <span>🌐 Play Online with Friends</span>
-          <span class="icon">➔</span>
+        <button id="btn-mode-local" class="btn-card">
+          <div class="card-icon-box local-icon">🎮</div>
+          <div class="card-info">
+            <span class="card-title">Pass &amp; Play</span>
+            <span class="card-sub">2 to 8 players on a single device</span>
+          </div>
+          <span class="card-arrow">➔</span>
         </button>
 
-        <button id="btn-mode-local" class="btn-menu">
-          <span>🎮 Pass &amp; Play (Local)</span>
-          <span class="icon">➔</span>
+        <button id="btn-mode-ai" class="btn-card">
+          <div class="card-icon-box ai-icon">🤖</div>
+          <div class="card-info">
+            <span class="card-title">Battle AI Bot</span>
+            <span class="card-sub">Singleplayer with tactical AI bots</span>
+          </div>
+          <span class="card-arrow">➔</span>
         </button>
 
-        <button id="btn-mode-ai" class="btn-menu">
-          <span>🤖 Play vs Tactical AI</span>
-          <span class="icon">➔</span>
+        <button id="btn-mode-lan" class="btn-card highlight-lan">
+          <div class="card-icon-box lan-icon">📡</div>
+          <div class="card-info">
+            <span class="card-title">LAN Multiplayer</span>
+            <span class="card-sub">0ms latency via Wi-Fi or Mobile Hotspot</span>
+          </div>
+          <span class="card-badge">HOTSPOT</span>
+          <span class="card-arrow">➔</span>
         </button>
 
-        <button id="btn-mode-lan" class="btn-menu primary">
-          <span>📡 LAN Multiplayer</span>
-          <span class="icon">➔</span>
+        <button id="btn-mode-online" class="btn-card highlight-online">
+          <div class="card-icon-box online-icon">🌐</div>
+          <div class="card-info">
+            <span class="card-title">Online Multiplayer</span>
+            <span class="card-sub">Play worldwide using a 6-digit Room ID</span>
+          </div>
+          <span class="card-badge-online">GLOBAL</span>
+          <span class="card-arrow">➔</span>
         </button>
 
-        <button id="btn-settings" class="btn-menu">
-          <span>⚙️ Settings</span>
-          <span class="icon">➔</span>
+        <button id="btn-rules" class="btn-card rules-card">
+          <div class="card-icon-box rules-icon">📖</div>
+          <div class="card-info">
+            <span class="card-title">How to Play &amp; Rules</span>
+            <span class="card-sub">Interactive explosion &amp; cascade guide</span>
+          </div>
+          <span class="card-arrow">➔</span>
+        </button>
+
+        <button id="btn-settings" class="btn-card settings-card">
+          <div class="card-icon-box settings-icon">⚙️</div>
+          <div class="card-info">
+            <span class="card-title">Settings &amp; Audio</span>
+            <span class="card-sub">Sound effects, haptics &amp; server URL</span>
+          </div>
+          <span class="card-arrow">➔</span>
         </button>
       </div>
     </div>
+  </div>
 
-    <!-- SCREEN 2: LOCAL PASS & PLAY SETUP -->
-    <div id="screen-setup-local" class="screen">
-      <button class="btn-back">← Back to Menu</button>
+  <!-- SCREEN: HOW TO PLAY & RULES (WITH ANIMATED DEMO) -->
+  <div id="screen-rules" class="screen">
+    <div class="content-container">
+      <div class="screen-nav">
+        <button class="btn-back">← Back to Menu</button>
+        <h2 class="nav-title">How to Play &amp; Rules</h2>
+      </div>
+
+      <div class="rules-card-box">
+        <!-- Core Goal -->
+        <div class="rule-section">
+          <h3 class="rule-heading">🎯 Objective</h3>
+          <p class="rule-text">
+            Chain Reaction is a deterministic strategy game. Players take turns placing orbs into grid cells.
+            Your goal is to <strong>eliminate all opponents' orbs</strong> and conquer the entire board!
+          </p>
+        </div>
+
+        <!-- Critical Mass -->
+        <div class="rule-section">
+          <h3 class="rule-heading">💥 Critical Mass Thresholds</h3>
+          <p class="rule-text">
+            Each cell has a limit on how many orbs it can hold before it <strong>explodes</strong> into adjacent orthogonal cells:
+          </p>
+          <div class="threshold-grid">
+            <div class="threshold-card corner-thresh">
+              <div class="thresh-count">2</div>
+              <div class="thresh-label">CORNER CELLS</div>
+              <div class="thresh-sub">Explodes on 2nd orb<br>Splits in 2 directions</div>
+            </div>
+            <div class="threshold-card edge-thresh">
+              <div class="thresh-count">3</div>
+              <div class="thresh-label">BORDER CELLS</div>
+              <div class="thresh-sub">Explodes on 3rd orb<br>Splits in 3 directions</div>
+            </div>
+            <div class="threshold-card center-thresh">
+              <div class="thresh-count">4</div>
+              <div class="thresh-label">CENTER CELLS</div>
+              <div class="thresh-sub">Explodes on 4th orb<br>Splits in 4 directions</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Interactive Animated Cases -->
+        <div class="rule-section">
+          <h3 class="rule-heading">🎬 Interactive Case Demonstrations</h3>
+          <p class="rule-text">Select an explosion scenario to watch the real-time animated simulation:</p>
+          
+          <div class="demo-tabs">
+            <button id="btn-demo-corner" class="btn-demo-tab active">💥 Corner (2 Orbs)</button>
+            <button id="btn-demo-edge" class="btn-demo-tab">⚡ Edge (3 Orbs)</button>
+            <button id="btn-demo-cascade" class="btn-demo-tab">🔥 Chain Cascade</button>
+          </div>
+
+          <div class="demo-canvas-wrapper">
+            <canvas id="rules-demo-canvas"></canvas>
+          </div>
+
+          <div class="demo-footer">
+            <p id="rules-scenario-desc" class="demo-desc-text">
+              <strong>Corner Explosion:</strong> Corner cells burst upon receiving their 2nd orb, sending orbs into orthogonal neighbors!
+            </p>
+            <button id="btn-replay-demo" class="btn-replay">▶ Replay Animation</button>
+          </div>
+        </div>
+
+        <!-- Elimination & Victory Rules -->
+        <div class="rule-section">
+          <h3 class="rule-heading">⚔️ Capturing &amp; Eliminations</h3>
+          <ul class="rules-list">
+            <li><strong>Orb Capturing:</strong> When your exploding orbs land in a cell containing an opponent's orbs, you instantly take over all orbs in that cell!</li>
+            <li><strong>Chain Cascade:</strong> If the newly captured cell exceeds critical mass, it explodes in your color too, igniting a cascading chain reaction!</li>
+            <li><strong>First Round Immunity:</strong> In Round 1, no one can be eliminated until they have placed their first orb.</li>
+            <li><strong>Player Elimination:</strong> After your first move, if you ever have <strong>0 orbs remaining</strong> on the board, you are eliminated!</li>
+            <li><strong>Sole Survivor Victory:</strong> The last remaining player on the board wins the match!</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCREEN 2: LOCAL PASS & PLAY SETUP -->
+  <div id="screen-setup-local" class="screen">
+    <div class="content-container">
+      <div class="screen-nav">
+        <button class="btn-back">← Back to Menu</button>
+        <h2 class="nav-title">Pass &amp; Play Setup</h2>
+      </div>
+
       <div class="form-card">
-        <h2 style="margin-bottom: 20px;">Pass &amp; Play Setup</h2>
         <div class="form-group">
-          <label>Number of Players (2 - 8)</label>
-          <select id="local-player-count" class="form-control">
-            <option value="2">2 Players</option>
-            <option value="3">3 Players</option>
-            <option value="4" selected>4 Players</option>
-            <option value="5">5 Players</option>
-            <option value="6">6 Players</option>
-            <option value="7">7 Players</option>
-            <option value="8">8 Players</option>
-          </select>
+          <label>Number of Players</label>
+          <div class="pill-selector" id="local-player-pills">
+            <button class="pill-btn" data-val="2">2</button>
+            <button class="pill-btn" data-val="3">3</button>
+            <button class="pill-btn active" data-val="4">4</button>
+            <button class="pill-btn" data-val="5">5</button>
+            <button class="pill-btn" data-val="6">6</button>
+            <button class="pill-btn" data-val="7">7</button>
+            <button class="pill-btn" data-val="8">8</button>
+          </div>
+          <input type="hidden" id="local-player-count" value="4">
         </div>
 
         <div class="form-group">
-          <label>Grid Size</label>
+          <label>Grid Dimensions</label>
           <select id="local-grid-size" class="form-control">
             <option value="9x6" selected>Standard (9 rows × 6 cols)</option>
             <option value="10x8">Large HD (10 rows × 8 cols)</option>
@@ -73,31 +206,36 @@
           </select>
         </div>
 
-        <button id="btn-start-local" class="btn-action">Start Game</button>
+        <button id="btn-start-local" class="btn-action">Start Local Match</button>
       </div>
     </div>
+  </div>
 
-    <!-- SCREEN 3: PLAY VS AI SETUP -->
-    <div id="screen-setup-ai" class="screen">
-      <button class="btn-back">← Back to Menu</button>
+  <!-- SCREEN 3: PLAY VS AI SETUP -->
+  <div id="screen-setup-ai" class="screen">
+    <div class="content-container">
+      <div class="screen-nav">
+        <button class="btn-back">← Back to Menu</button>
+        <h2 class="nav-title">Battle AI Opponent</h2>
+      </div>
+
       <div class="form-card">
-        <h2 style="margin-bottom: 20px;">Play vs AI</h2>
         <div class="form-group">
-          <label>AI Opponents Count</label>
+          <label>Number of AI Opponents</label>
           <select id="ai-bot-count" class="form-control">
-            <option value="1" selected>1 Bot (1 vs 1)</option>
-            <option value="2">2 Bots</option>
-            <option value="3">3 Bots (4 Players total)</option>
-            <option value="7">7 Bots (Full Chaos)</option>
+            <option value="1" selected>1 Bot (1 vs 1 Duel)</option>
+            <option value="2">2 Bots (3 Players)</option>
+            <option value="3">3 Bots (4 Players)</option>
+            <option value="7">7 Bots (8-Player Chaos)</option>
           </select>
         </div>
 
         <div class="form-group">
-          <label>Difficulty</label>
+          <label>AI Intelligence Tier</label>
           <select id="ai-difficulty" class="form-control">
-            <option value="easy">Easy (Casual)</option>
-            <option value="medium" selected>Medium (Tactical)</option>
-            <option value="hard">Hard (Mastermind)</option>
+            <option value="easy">Casual (Fun &amp; Relaxed)</option>
+            <option value="medium" selected>Tactical (Smart Positional)</option>
+            <option value="hard">Mastermind (Aggressive Chains)</option>
           </select>
         </div>
 
@@ -109,104 +247,112 @@
           </select>
         </div>
 
-        <button id="btn-start-ai" class="btn-action">Battle AI</button>
+        <button id="btn-start-ai" class="btn-action">Start AI Battle</button>
       </div>
     </div>
+  </div>
 
-    <!-- SCREEN 4: LAN MULTIPLAYER SETUP -->
-    <div id="screen-setup-lan" class="screen">
-      <button class="btn-back">← Back to Menu</button>
+  <!-- SCREEN 4: LAN MULTIPLAYER SETUP -->
+  <div id="screen-setup-lan" class="screen">
+    <div class="content-container">
+      <div class="screen-nav">
+        <button class="btn-back">← Back to Menu</button>
+        <h2 class="nav-title">LAN Multiplayer</h2>
+      </div>
+
       <div class="form-card">
-        <h2 style="margin-bottom: 12px;">📡 LAN Multiplayer</h2>
-        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
-          Connect devices to the same Wi-Fi router or phone Mobile Hotspot.
-        </p>
-
-        <div id="lan-ip-display" style="background: rgba(0, 229, 255, 0.1); border: 1px solid var(--primary-glow); padding: 10px; border-radius: 8px; font-size: 13px; margin-bottom: 16px;">
-          Hotspot / Local Wi-Fi Mode
+        <div id="lan-ip-display" class="lan-status-box">
+          Connecting to local network...
         </div>
 
         <div class="form-group">
-          <label>Your Name</label>
+          <label>Your Display Name</label>
           <input type="text" id="lan-player-name" class="form-control" value="Player" maxlength="15">
         </div>
 
-        <div style="display: flex; gap: 10px; margin-top: 20px;">
-          <div style="flex: 1; border-right: 1px solid var(--surface-border); padding-right: 10px;">
-            <h4 style="margin-bottom: 8px; color: var(--primary-accent);">HOST GAME</h4>
-            <button id="btn-lan-create" class="btn-action" style="font-size: 13px; padding: 12px;">Create Room</button>
+        <div class="split-columns">
+          <div class="split-col">
+            <h4 class="col-title host-color">HOST GAME</h4>
+            <p class="col-sub">Start a room on this Wi-Fi / Hotspot</p>
+            <input type="hidden" id="lan-host-port" value="8080">
+            <button id="btn-lan-create" class="btn-action">Create LAN Room</button>
           </div>
 
-          <div style="flex: 1;">
-            <h4 style="margin-bottom: 8px; color: #ff9800;">JOIN GAME</h4>
-            <input type="text" id="lan-join-ip" class="form-control" placeholder="Host IP (optional)" style="font-size: 12px; padding: 8px; margin-bottom: 6px;">
-            <input type="text" id="lan-room-code" class="form-control" placeholder="ROOM CODE" maxlength="6" style="text-transform: uppercase; font-size: 12px; padding: 8px; margin-bottom: 8px;">
-            <button id="btn-lan-join" class="btn-action" style="font-size: 13px; padding: 12px; background: #ff9800; color: #000;">Join</button>
+          <div class="split-col">
+            <h4 class="col-title join-color">JOIN GAME</h4>
+            <p class="col-sub">Enter host room code</p>
+            <input type="text" id="lan-join-ip" class="form-control mb-sm" placeholder="Host IP (optional)">
+            <input type="text" id="lan-room-code" class="form-control code-input mb-sm" placeholder="ROOM CODE" maxlength="6">
+            <button id="btn-lan-join" class="btn-action btn-join">Join Room</button>
           </div>
         </div>
       </div>
     </div>
+  </div>
 
-    <!-- SCREEN 5: ONLINE MULTIPLAYER SETUP -->
-    <div id="screen-setup-online" class="screen">
-      <button class="btn-back">← Back to Menu</button>
+  <!-- SCREEN 5: ONLINE MULTIPLAYER SETUP -->
+  <div id="screen-setup-online" class="screen">
+    <div class="content-container">
+      <div class="screen-nav">
+        <button class="btn-back">← Back to Menu</button>
+        <h2 class="nav-title">Online Multiplayer</h2>
+      </div>
+
       <div class="form-card">
-        <h2 style="margin-bottom: 12px;">🌐 Online Multiplayer</h2>
-        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 18px;">
-          Play with friends across the world using a unique 6-character Room Code!
+        <p class="card-intro">
+          Play with friends across cities and countries in real-time using a 6-digit Room ID!
         </p>
 
         <div class="form-group">
-          <label>Your Name</label>
+          <label>Your Display Name</label>
           <input type="text" id="online-player-name" class="form-control" value="Player" maxlength="15">
         </div>
 
-        <div style="margin-top: 24px;">
-          <button id="btn-online-create" class="btn-action" style="margin-bottom: 16px;">
-            ✨ Create New Online Room
-          </button>
+        <button id="btn-online-create" class="btn-action primary-glow-btn">
+          ✨ Create New Room
+        </button>
 
-          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
-            <div style="flex: 1; height: 1px; background: var(--surface-border);"></div>
-            <span style="font-size: 12px; color: var(--text-secondary); text-transform: uppercase;">or join with code</span>
-            <div style="flex: 1; height: 1px; background: var(--surface-border);"></div>
-          </div>
-
-          <div class="form-group">
-            <input type="text" id="online-room-code" class="form-control" placeholder="ENTER 6-DIGIT ROOM CODE" maxlength="6" style="text-transform: uppercase; text-align: center; font-size: 18px; letter-spacing: 2px;">
-          </div>
-
-          <button id="btn-online-join" class="btn-action" style="background: linear-gradient(135deg, #7b1fa2, #ab47bc); color: #fff;">
-            Enter Room
-          </button>
+        <div class="divider-text">
+          <span>OR JOIN EXISTING ROOM</span>
         </div>
+
+        <div class="form-group">
+          <input type="text" id="online-room-code" class="form-control code-large" placeholder="ENTER 6-DIGIT CODE" maxlength="6">
+        </div>
+
+        <button id="btn-online-join" class="btn-action purple-btn">
+          Enter Room
+        </button>
       </div>
     </div>
+  </div>
 
-    <!-- SCREEN 6: MULTIPLAYER LOBBY -->
-    <div id="screen-lobby" class="screen">
-      <div class="form-card">
+  <!-- SCREEN 6: MULTIPLAYER LOBBY -->
+  <div id="screen-lobby" class="screen">
+    <div class="content-container">
+      <div class="form-card lobby-card">
         <div class="lobby-header">
-          <h2>Room Lobby</h2>
-          <div class="room-badge">
-            <span>ROOM CODE:</span>
-            <span id="lobby-room-code" class="room-code-val">------</span>
-            <button id="btn-copy-code" style="background: none; border: none; font-size: 18px; cursor: pointer;" title="Copy Code">📋</button>
-            <button id="btn-share-room" style="background: none; border: none; font-size: 18px; cursor: pointer;" title="Share WhatsApp">🔗</button>
+          <h2 class="lobby-title">Match Lobby</h2>
+          <div class="room-pill">
+            <span class="room-pill-label">ROOM:</span>
+            <span id="lobby-room-code" class="room-pill-code">------</span>
+            <button id="btn-copy-code" class="icon-tool" title="Copy Room Code">📋</button>
+            <button id="btn-share-room" class="icon-tool" title="Share Room Invite">🔗</button>
           </div>
         </div>
 
-        <label style="font-size: 12px; color: var(--text-secondary); text-transform: uppercase; font-weight: 700; margin-bottom: 8px; display: block;">
-          Connected Players
-        </label>
-        <div id="lobby-players-list" class="lobby-players-list"></div>
+        <label class="section-label">Connected Players</label>
+        <div id="lobby-players-list" class="lobby-players-list">
+          <!-- Live Players dynamically injected -->
+        </div>
 
-        <label style="font-size: 12px; color: var(--text-secondary); text-transform: uppercase; font-weight: 700; margin-bottom: 8px; display: block;">
-          Choose Your Orb Color
-        </label>
-        <div id="lobby-color-picker" class="color-picker-grid"></div>
+        <label class="section-label">Select Your Orb Color</label>
+        <div id="lobby-color-picker" class="color-picker-grid">
+          <!-- 8 player colors -->
+        </div>
 
-        <div id="lobby-host-controls" style="display: none; border-top: 1px solid var(--surface-border); padding-top: 14px; margin-top: 10px;">
+        <!-- Host Controls -->
+        <div id="lobby-host-controls" class="lobby-host-box" style="display: none;">
           <div class="form-group">
             <label>Grid Size</label>
             <select id="lobby-grid-size" class="form-control">
@@ -217,80 +363,101 @@
           </div>
         </div>
 
-        <div style="display: flex; gap: 10px; margin-top: 16px;">
-          <button class="btn-back" style="margin: 0; padding: 12px;">Leave</button>
-          <button id="btn-lobby-ready" class="btn-action" style="background: #4caf50; color: #fff;">READY</button>
-          <button id="btn-lobby-start" class="btn-action" style="display: none;">START GAME</button>
+        <div class="lobby-action-row">
+          <button class="btn-back btn-leave">Leave</button>
+          <button id="btn-lobby-ready" class="btn-action ready-btn">READY</button>
+          <button id="btn-lobby-start" class="btn-action start-btn" style="display: none;">START MATCH</button>
         </div>
       </div>
     </div>
-
-    <!-- SCREEN 7: IN-GAME HUD & CANVAS -->
-    <div id="screen-game" class="screen">
-      <div class="game-hud">
-        <div class="hud-top-row">
-          <div id="hud-current-turn" class="hud-turn-text">Red's Turn</div>
-          <div class="hud-actions">
-            <button id="btn-undo" class="btn-icon" title="Undo Move">↩️</button>
-            <button id="btn-game-menu" class="btn-icon" title="Menu">⚙️</button>
-          </div>
-        </div>
-
-        <div id="hud-player-scores" class="hud-scores"></div>
-
-        <div class="timer-progress">
-          <div id="hud-timer-bar" class="timer-bar"></div>
-        </div>
-      </div>
-
-      <div class="canvas-wrapper">
-        <canvas id="game-canvas"></canvas>
-      </div>
-    </div>
-
-    <!-- GAME OVER MODAL -->
-    <div id="modal-gameover" class="modal">
-      <div class="modal-content">
-        <div class="winner-trophy">🏆</div>
-        <div id="gameover-winner-text" class="winner-text">Player 1 WINS!</div>
-        <p style="color: var(--text-secondary); margin-bottom: 24px; font-size: 14px;">Great match! Orbs captured with tactical chain reactions.</p>
-        <div style="display: flex; gap: 10px;">
-          <button id="btn-gameover-menu" class="btn-menu" style="flex: 1; justify-content: center; padding: 14px;">Main Menu</button>
-          <button id="btn-play-again" class="btn-action" style="flex: 1; padding: 14px;">Play Again</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- SETTINGS MODAL -->
-    <div id="modal-settings" class="modal">
-      <div class="modal-content" style="text-align: left;">
-        <h2 style="margin-bottom: 20px;">Settings</h2>
-
-        <div class="form-group" style="display: flex; align-items: center; justify-content: space-between;">
-          <label style="margin: 0;">Sound FX</label>
-          <input type="checkbox" id="toggle-sound" checked style="width: 20px; height: 20px;">
-        </div>
-
-        <div class="form-group">
-          <label>Multiplayer Server URL</label>
-          <input type="text" id="setting-server-url" class="form-control" placeholder="wss://chain-reaction-server-qq7p.onrender.com">
-          <small style="color: var(--text-secondary); font-size: 11px; margin-top: 4px; display: block;">
-            Connected to your live Render server!
-          </small>
-        </div>
-
-        <button id="btn-close-settings" class="btn-action" style="margin-top: 10px;">Save &amp; Close</button>
-      </div>
-    </div>
-
-    <!-- TOAST CONTAINER -->
-    <div id="toast-container"></div>
   </div>
+
+  <!-- SCREEN 7: IN-GAME HUD & CANVAS -->
+  <div id="screen-game" class="screen">
+    <div class="game-hud">
+      <div class="hud-top-bar">
+        <div class="hud-current-wrapper">
+          <span class="pulse-dot"></span>
+          <div id="hud-current-turn" class="hud-turn-text">Red's Turn</div>
+        </div>
+        <div class="hud-actions">
+          <button id="btn-undo" class="hud-icon-btn" title="Undo Move">↩️</button>
+          <button id="btn-game-menu" class="hud-icon-btn" title="Settings / Exit">⚙️</button>
+        </div>
+      </div>
+
+      <div id="hud-player-scores" class="hud-scores-row">
+        <!-- Player stats badges -->
+      </div>
+
+      <div class="timer-track">
+        <div id="hud-timer-bar" class="timer-fill"></div>
+      </div>
+    </div>
+
+    <div class="canvas-wrapper">
+      <canvas id="game-canvas"></canvas>
+    </div>
+  </div>
+
+  <!-- GAME OVER MODAL (WITH MUTUAL CONSENT REMATCH) -->
+  <div id="modal-gameover" class="modal">
+    <div class="modal-card">
+      <div class="winner-trophy-ring">🏆</div>
+      <div id="gameover-winner-text" class="winner-headline">Player 1 WINS!</div>
+      <p class="winner-sub">Match concluded. Every cell dominated by tactical chain reactions.</p>
+
+      <!-- Rematch Mutual Consensus Status Area -->
+      <div id="rematch-status-box" class="rematch-box">
+        <div class="rematch-header">
+          <span class="rematch-title">MUTUAL REMATCH</span>
+          <span id="rematch-count" class="rematch-counter">0/2 Agreed</span>
+        </div>
+        <div id="rematch-players-list" class="rematch-chips">
+          <!-- Dynamic rematch status chips -->
+        </div>
+        <p id="rematch-hint-text" class="rematch-hint">Both players must agree to restart the match.</p>
+      </div>
+
+      <div class="modal-btn-row">
+        <button id="btn-gameover-menu" class="btn-modal-secondary">Main Menu</button>
+        <button id="btn-play-again" class="btn-modal-primary">Play Again</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS MODAL -->
+  <div id="modal-settings" class="modal">
+    <div class="modal-card settings-modal">
+      <div class="modal-header">
+        <h2>Game Settings</h2>
+      </div>
+
+      <div class="setting-item">
+        <label>Sound Effects &amp; Audio</label>
+        <input type="checkbox" id="toggle-sound" checked class="switch-toggle">
+      </div>
+
+      <div class="form-group mt-md">
+        <label>Multiplayer Server URL</label>
+        <input type="text" id="setting-server-url" class="form-control" placeholder="wss://your-server.onrender.com">
+        <small class="helper-text">
+          Default connects to the live high-speed Render cloud server.
+        </small>
+      </div>
+
+      <button id="btn-close-settings" class="btn-action mt-md">Save Settings</button>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATIONS -->
+  <div id="toast-container"></div>
 
   <!-- SCRIPTS -->
   <script src="js/audio.js"></script>
   <script src="js/game_engine.js"></script>
   <script src="js/renderer.js"></script>
+  <script src="js/rules_demo.js"></script>
   <script src="js/ai.js"></script>
   <script src="js/network.js"></script>
   <script src="js/app.js"></script>
