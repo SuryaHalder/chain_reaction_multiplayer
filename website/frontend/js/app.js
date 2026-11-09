@@ -750,4 +750,32 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
   };
+
+  // Desktop keyboard shortcuts
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'u' || e.key === 'U') {
+      const btnUndo = document.getElementById('btn-undo');
+      if (btnUndo && btnUndo.style.display !== 'none' && gameMode === 'LOCAL' && engine) {
+        if (engine.undo()) {
+          window.soundManager.play('click');
+          renderer.setEngine(engine);
+          updateHud();
+        }
+      }
+    } else if (e.key === 'Escape') {
+      const settingsModal = document.getElementById('modal-settings');
+      if (settingsModal && settingsModal.classList.contains('active')) {
+        settingsModal.classList.remove('active');
+        return;
+      }
+      const gameScreen = document.getElementById('screen-game');
+      if (gameScreen && gameScreen.classList.contains('active')) {
+        if (confirm('Leave current game?')) {
+          clearInterval(turnTimerId);
+          window.networkClient.disconnect();
+          showScreen('menu');
+        }
+      }
+    }
+  });
 });

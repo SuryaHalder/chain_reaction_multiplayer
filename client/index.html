@@ -93,7 +93,7 @@
     </div>
   </div>
 
-  <!-- SCREEN: HOW TO PLAY & RULES (WITH ANIMATED DEMO) -->
+  <!-- SCREEN: HOW TO PLAY & RULES (SPLIT DESKTOP & MOBILE RESPONSIVE) -->
   <div id="screen-rules" class="screen">
     <div class="content-container">
       <div class="screen-nav">
@@ -102,49 +102,61 @@
       </div>
 
       <div class="rules-card-box">
-        <!-- Core Goal -->
-        <div class="rule-section">
-          <h3 class="rule-heading">🎯 Objective</h3>
-          <p class="rule-text">
-            Chain Reaction is a deterministic strategy game. Players take turns placing orbs into grid cells.
-            Your goal is to <strong>eliminate all opponents' orbs</strong> and conquer the entire board!
-          </p>
-        </div>
+        <!-- Left: Rule Information Column -->
+        <div class="rules-info-col">
+          <div class="rule-section">
+            <h3 class="rule-heading">🎯 Objective</h3>
+            <p class="rule-text">
+              Chain Reaction is a deterministic strategy game. Players take turns placing orbs into grid cells.
+              Your goal is to <strong>eliminate all opponents' orbs</strong> and conquer the entire board!
+            </p>
+          </div>
 
-        <!-- Critical Mass -->
-        <div class="rule-section">
-          <h3 class="rule-heading">💥 Critical Mass Thresholds</h3>
-          <p class="rule-text">
-            Each cell has a limit on how many orbs it can hold before it <strong>explodes</strong> into adjacent orthogonal cells:
-          </p>
-          <div class="threshold-grid">
-            <div class="threshold-card corner-thresh">
-              <div class="thresh-count">2</div>
-              <div class="thresh-label">CORNER CELLS</div>
-              <div class="thresh-sub">Explodes on 2nd orb<br>Splits in 2 directions</div>
+          <div class="rule-section">
+            <h3 class="rule-heading">💥 Critical Mass Thresholds</h3>
+            <p class="rule-text">
+              Each cell has a limit on how many orbs it can hold before it <strong>explodes</strong> into adjacent orthogonal cells:
+            </p>
+            <div class="threshold-grid">
+              <div class="threshold-card corner-thresh">
+                <div class="thresh-count">2</div>
+                <div class="thresh-label">CORNER CELLS</div>
+                <div class="thresh-sub">Explodes on 2nd orb<br>Splits in 2 directions</div>
+              </div>
+              <div class="threshold-card edge-thresh">
+                <div class="thresh-count">3</div>
+                <div class="thresh-label">BORDER CELLS</div>
+                <div class="thresh-sub">Explodes on 3rd orb<br>Splits in 3 directions</div>
+              </div>
+              <div class="threshold-card center-thresh">
+                <div class="thresh-count">4</div>
+                <div class="thresh-label">CENTER CELLS</div>
+                <div class="thresh-sub">Explodes on 4th orb<br>Splits in 4 directions</div>
+              </div>
             </div>
-            <div class="threshold-card edge-thresh">
-              <div class="thresh-count">3</div>
-              <div class="thresh-label">BORDER CELLS</div>
-              <div class="thresh-sub">Explodes on 3rd orb<br>Splits in 3 directions</div>
-            </div>
-            <div class="threshold-card center-thresh">
-              <div class="thresh-count">4</div>
-              <div class="thresh-label">CENTER CELLS</div>
-              <div class="thresh-sub">Explodes on 4th orb<br>Splits in 4 directions</div>
-            </div>
+          </div>
+
+          <div class="rule-section">
+            <h3 class="rule-heading">⚔️ Capturing &amp; Eliminations</h3>
+            <ul class="rules-list">
+              <li><strong>Orb Capturing:</strong> When your exploding orbs land in a cell containing an opponent's orbs, you instantly take over all orbs in that cell!</li>
+              <li><strong>Chain Cascade:</strong> If the newly captured cell exceeds critical mass, it explodes in your color too, igniting a cascading chain reaction!</li>
+              <li><strong>First Round Immunity:</strong> In Round 1, no one can be eliminated until they have placed their first orb.</li>
+              <li><strong>Player Elimination:</strong> After your first move, if you ever have <strong>0 orbs remaining</strong> on the board, you are eliminated!</li>
+              <li><strong>Sole Survivor Victory:</strong> The last remaining player on the board wins the match!</li>
+            </ul>
           </div>
         </div>
 
-        <!-- Interactive Animated Cases -->
-        <div class="rule-section">
-          <h3 class="rule-heading">🎬 Interactive Case Demonstrations</h3>
+        <!-- Right: Interactive Live Simulation Column -->
+        <div class="rules-demo-col">
+          <h3 class="rule-heading">🎬 Live Case Demonstrations</h3>
           <p class="rule-text">Select an explosion scenario to watch the real-time animated simulation:</p>
           
           <div class="demo-tabs">
-            <button id="btn-demo-corner" class="btn-demo-tab active">💥 Corner (2 Orbs)</button>
-            <button id="btn-demo-edge" class="btn-demo-tab">⚡ Edge (3 Orbs)</button>
-            <button id="btn-demo-cascade" class="btn-demo-tab">🔥 Chain Cascade</button>
+            <button id="btn-demo-corner" class="btn-demo-tab active">💥 Corner (2)</button>
+            <button id="btn-demo-edge" class="btn-demo-tab">⚡ Edge (3)</button>
+            <button id="btn-demo-cascade" class="btn-demo-tab">🔥 Cascade</button>
           </div>
 
           <div class="demo-canvas-wrapper">
@@ -157,18 +169,6 @@
             </p>
             <button id="btn-replay-demo" class="btn-replay">▶ Replay Animation</button>
           </div>
-        </div>
-
-        <!-- Elimination & Victory Rules -->
-        <div class="rule-section">
-          <h3 class="rule-heading">⚔️ Capturing &amp; Eliminations</h3>
-          <ul class="rules-list">
-            <li><strong>Orb Capturing:</strong> When your exploding orbs land in a cell containing an opponent's orbs, you instantly take over all orbs in that cell!</li>
-            <li><strong>Chain Cascade:</strong> If the newly captured cell exceeds critical mass, it explodes in your color too, igniting a cascading chain reaction!</li>
-            <li><strong>First Round Immunity:</strong> In Round 1, no one can be eliminated until they have placed their first orb.</li>
-            <li><strong>Player Elimination:</strong> After your first move, if you ever have <strong>0 orbs remaining</strong> on the board, you are eliminated!</li>
-            <li><strong>Sole Survivor Victory:</strong> The last remaining player on the board wins the match!</li>
-          </ul>
         </div>
       </div>
     </div>
@@ -372,31 +372,40 @@
     </div>
   </div>
 
-  <!-- SCREEN 7: IN-GAME HUD & CANVAS -->
+  <!-- SCREEN 7: IN-GAME HUD & CANVAS (RESPONSIVE ARENA) -->
   <div id="screen-game" class="screen">
-    <div class="game-hud">
-      <div class="hud-top-bar">
-        <div class="hud-current-wrapper">
-          <span class="pulse-dot"></span>
-          <div id="hud-current-turn" class="hud-turn-text">Red's Turn</div>
-        </div>
-        <div class="hud-actions">
-          <button id="btn-undo" class="hud-icon-btn" title="Undo Move">↩️</button>
-          <button id="btn-game-menu" class="hud-icon-btn" title="Settings / Exit">⚙️</button>
+    <div class="game-layout">
+      <!-- Main Game Board Canvas Arena -->
+      <div class="canvas-panel">
+        <div class="canvas-wrapper">
+          <canvas id="game-canvas"></canvas>
         </div>
       </div>
 
-      <div id="hud-player-scores" class="hud-scores-row">
-        <!-- Player stats badges -->
-      </div>
+      <!-- In-Game Dashboard & Sidebar (Top bar on Mobile, Sidebar on Desktop) -->
+      <div class="game-hud">
+        <div class="hud-top-bar">
+          <div class="hud-current-wrapper">
+            <span class="pulse-dot"></span>
+            <div id="hud-current-turn" class="hud-turn-text">Red's Turn</div>
+          </div>
+          <div class="hud-actions">
+            <button id="btn-undo" class="hud-icon-btn" title="Undo Move [U]">↩️</button>
+            <button id="btn-game-menu" class="hud-icon-btn" title="Settings / Exit [Esc]">⚙️</button>
+          </div>
+        </div>
 
-      <div class="timer-track">
-        <div id="hud-timer-bar" class="timer-fill"></div>
-      </div>
-    </div>
+        <div class="timer-track">
+          <div id="hud-timer-bar" class="timer-fill"></div>
+        </div>
 
-    <div class="canvas-wrapper">
-      <canvas id="game-canvas"></canvas>
+        <div class="scoreboard-section">
+          <div class="scoreboard-title">LEADERBOARD &amp; ORBS</div>
+          <div id="hud-player-scores" class="hud-scores-row">
+            <!-- Player stats badges -->
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 

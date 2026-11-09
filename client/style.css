@@ -1,22 +1,22 @@
 /* ==========================================================================
    CHAIN REACTION MULTIPLAYER - BESPOKE GAMING STYLESHEET
-   Supports Desktop/Laptop & Mobile with Glassmorphism, Ambient Nebula Glows,
-   Custom Gaming Typography, and High-DPI Canvas Support.
+   Full Responsive Support for Desktop/Laptop, Tablets, and Mobile.
+   Bespoke Dark Nebula Theme, Glassmorphism, Gaming Typography & Tactile Controls.
    ========================================================================== */
 
 :root {
   --bg-space: #07090e;
-  --bg-surface: rgba(18, 24, 38, 0.82);
-  --bg-surface-elevated: rgba(26, 34, 52, 0.9);
+  --bg-surface: rgba(18, 24, 38, 0.85);
+  --bg-surface-elevated: rgba(26, 34, 52, 0.92);
   --border-subtle: rgba(255, 255, 255, 0.09);
   --border-highlight: rgba(0, 229, 255, 0.35);
 
   --accent-cyan: #00e5ff;
-  --accent-cyan-glow: rgba(0, 229, 255, 0.45);
+  --accent-cyan-glow: rgba(0, 229, 255, 0.4);
   --accent-purple: #9c27b0;
-  --accent-purple-glow: rgba(156, 39, 176, 0.45);
+  --accent-purple-glow: rgba(156, 39, 176, 0.4);
   --accent-green: #4caf50;
-  --accent-green-glow: rgba(76, 175, 80, 0.45);
+  --accent-green-glow: rgba(76, 175, 80, 0.4);
   --accent-amber: #ff9800;
 
   --text-main: #f0f4fc;
@@ -39,6 +39,22 @@
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Custom Scrollbars for Desktop */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(7, 9, 14, 0.6);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 229, 255, 0.45);
 }
 
 html, body {
@@ -105,7 +121,7 @@ html, body {
   flex-direction: column;
 }
 
-/* Desktop & Laptop Centering Containers */
+/* Centering Containers */
 .menu-container,
 .content-container {
   width: 100%;
@@ -115,15 +131,11 @@ html, body {
   z-index: 2;
 }
 
-.content-container {
-  max-width: 560px;
-}
-
 /* Header & Title */
 .app-header {
   text-align: center;
-  margin-top: 18px;
-  margin-bottom: 26px;
+  margin-top: 14px;
+  margin-bottom: 24px;
 }
 
 .logo-wrapper {
@@ -132,8 +144,8 @@ html, body {
 }
 
 .app-logo-img {
-  width: 80px;
-  height: 80px;
+  width: 76px;
+  height: 76px;
   border-radius: 20px;
   filter: drop-shadow(0 8px 24px var(--accent-cyan-glow));
   transition: transform 0.3s ease;
@@ -145,11 +157,11 @@ html, body {
 
 .app-title {
   font-family: var(--font-display);
-  font-size: 34px;
+  font-size: 32px;
   font-weight: 800;
   letter-spacing: 1.5px;
   text-transform: uppercase;
-  margin-top: 14px;
+  margin-top: 12px;
   margin-bottom: 8px;
   background: linear-gradient(135deg, #ffffff 10%, #00e5ff 60%, #bd93f9 100%);
   -webkit-background-clip: text;
@@ -216,14 +228,14 @@ html, body {
   left: 0;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.04), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
   transform: translateX(-100%);
   transition: transform 0.6s ease;
 }
 
 .btn-card:hover {
   transform: translateY(-2px);
-  border-color: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.22);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
 }
 
@@ -394,7 +406,7 @@ html, body {
   font-size: 15px;
   font-weight: 500;
   color: #fff;
-  background: rgba(8, 12, 19, 0.8);
+  background: rgba(8, 12, 19, 0.85);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   outline: none;
@@ -456,7 +468,7 @@ html, body {
   box-shadow: 0 0 14px var(--accent-cyan-glow);
 }
 
-/* Primary Action Buttons */
+/* Action Buttons */
 .btn-action {
   width: 100%;
   padding: 16px 20px;
@@ -561,6 +573,16 @@ html, body {
   color: var(--text-dim);
 }
 
+.lan-status-box {
+  background: rgba(0, 229, 255, 0.1);
+  border: 1px solid var(--accent-cyan-glow);
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  color: var(--accent-cyan);
+  margin-bottom: 18px;
+}
+
 /* ==========================================================================
    RULES & INTERACTIVE DEMO STYLES
    ========================================================================== */
@@ -574,6 +596,18 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 22px;
+}
+
+.rules-info-col {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.rules-demo-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .rule-section {
@@ -596,7 +630,6 @@ html, body {
   line-height: 1.6;
 }
 
-/* Threshold Grid */
 .threshold-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -639,12 +672,11 @@ html, body {
   line-height: 1.3;
 }
 
-/* Interactive Demo Controls */
 .demo-tabs {
   display: flex;
   gap: 8px;
-  margin-top: 8px;
-  margin-bottom: 12px;
+  margin-top: 4px;
+  margin-bottom: 8px;
 }
 
 .btn-demo-tab {
@@ -690,7 +722,7 @@ html, body {
 }
 
 .demo-footer {
-  margin-top: 12px;
+  margin-top: 8px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -751,7 +783,7 @@ html, body {
 
 /* Lobby */
 .lobby-card {
-  max-width: 480px;
+  max-width: 500px;
 }
 
 .lobby-header {
@@ -886,11 +918,37 @@ html, body {
 }
 
 /* ==========================================================================
-   GAME SCREEN & CANVAS
+   GAME SCREEN & ARENA (RESPONSIVE FOR DESKTOP & MOBILE)
    ========================================================================== */
 #screen-game {
   padding: 0;
   overflow: hidden;
+}
+
+.game-layout {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+.canvas-panel {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg-space);
+  overflow: hidden;
+}
+
+.canvas-wrapper {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
 }
 
 .game-hud {
@@ -958,6 +1016,11 @@ html, body {
 
 .hud-icon-btn:hover {
   background: rgba(255, 255, 255, 0.12);
+  transform: scale(1.05);
+}
+
+.scoreboard-title {
+  display: none;
 }
 
 .hud-scores-row {
@@ -979,6 +1042,7 @@ html, body {
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
+  transition: all 0.2s;
 }
 
 .player-badge.active {
@@ -1012,22 +1076,13 @@ html, body {
   transition: width 0.3s linear;
 }
 
-.canvas-wrapper {
-  flex: 1;
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: var(--bg-space);
-}
-
 canvas {
   display: block;
   touch-action: none;
 }
 
 /* ==========================================================================
-   MODALS (GAME OVER & SETTINGS)
+   MODALS
    ========================================================================== */
 .modal {
   display: none;
@@ -1055,7 +1110,7 @@ canvas {
   border-radius: var(--radius-xl);
   padding: 28px;
   width: 100%;
-  max-width: 420px;
+  max-width: 440px;
   text-align: center;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
   animation: modalPop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
@@ -1086,7 +1141,6 @@ canvas {
   line-height: 1.4;
 }
 
-/* Rematch Mutual Box */
 .rematch-box {
   background: rgba(8, 12, 19, 0.85);
   border: 1px solid var(--border-subtle);
@@ -1194,6 +1248,47 @@ canvas {
   box-shadow: 0 8px 24px var(--accent-cyan-glow);
 }
 
+.settings-modal {
+  text-align: left;
+}
+
+.modal-header h2 {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 800;
+  margin-bottom: 18px;
+}
+
+.setting-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.setting-item label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.switch-toggle {
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+}
+
+.mt-md { margin-top: 16px; }
+
+.helper-text {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: block;
+  margin-top: 6px;
+  line-height: 1.4;
+}
+
 /* Toast */
 #toast-container {
   position: fixed;
@@ -1231,18 +1326,211 @@ canvas {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Responsive Overrides */
+/* ==========================================================================
+   DESKTOP & WIDESCREEN RESPONSIVE MEDIA QUERIES
+   ========================================================================== */
+
+/* Tablet & Medium Desktop (>= 768px) */
+@media (min-width: 768px) {
+  .menu-container {
+    max-width: 860px;
+    padding: 30px 20px;
+  }
+
+  .app-header {
+    margin-top: 14px;
+    margin-bottom: 32px;
+  }
+
+  .app-title {
+    font-size: 40px;
+    letter-spacing: 2px;
+  }
+
+  .app-logo-img {
+    width: 88px;
+    height: 88px;
+  }
+
+  /* 2-Column Grid for Menu */
+  .menu-options {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+
+  .btn-card {
+    padding: 18px 20px;
+  }
+
+  .card-icon-box {
+    width: 50px;
+    height: 50px;
+    font-size: 24px;
+  }
+
+  .card-title {
+    font-size: 17px;
+  }
+
+  .content-container {
+    max-width: 680px;
+    margin: 20px auto;
+  }
+
+  .form-card {
+    padding: 32px;
+  }
+}
+
+/* Desktop & Laptop (>= 860px) */
+@media (min-width: 860px) {
+  .screen {
+    padding: 30px 40px;
+  }
+
+  /* Desktop Widescreen Game Arena */
+  #screen-game {
+    padding: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .game-layout {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    max-width: 1140px;
+    height: 100%;
+    max-height: 94vh;
+    gap: 32px;
+  }
+
+  .canvas-panel {
+    flex: 1;
+    height: 100%;
+    max-width: 660px;
+    background: rgba(14, 20, 32, 0.75);
+    border: 1px solid var(--border-subtle);
+    border-radius: 24px;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5), inset 0 0 24px rgba(0, 0, 0, 0.4);
+    padding: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .canvas-wrapper {
+    width: 100%;
+    height: 100%;
+  }
+
+  .game-hud {
+    width: 340px;
+    flex-shrink: 0;
+    height: 100%;
+    max-height: 100%;
+    background: var(--bg-surface-elevated);
+    border: 1px solid var(--border-subtle);
+    border-radius: 24px;
+    padding: 24px;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    overflow-y: auto;
+  }
+
+  .hud-turn-text {
+    font-size: 20px;
+  }
+
+  .scoreboard-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 6px;
+  }
+
+  .scoreboard-title {
+    display: block;
+    font-family: var(--font-display);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 1.2px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+  }
+
+  .hud-scores-row {
+    flex-direction: column;
+    gap: 10px;
+    overflow-x: visible;
+    margin-top: 0;
+  }
+
+  .player-badge {
+    width: 100%;
+    padding: 10px 14px;
+    border-radius: var(--radius-md);
+    font-size: 14px;
+    justify-content: space-between;
+  }
+
+  .player-badge .badge-count {
+    font-size: 16px;
+    background: rgba(255, 255, 255, 0.08);
+    padding: 2px 8px;
+    border-radius: 6px;
+  }
+}
+
+/* Widescreen Rules Layout (>= 900px) */
+@media (min-width: 900px) {
+  #screen-rules .content-container {
+    max-width: 1060px;
+  }
+
+  .rules-card-box {
+    display: grid;
+    grid-template-columns: 1.15fr 0.85fr;
+    gap: 32px;
+    align-items: start;
+    padding: 32px;
+  }
+
+  .rules-demo-col {
+    position: sticky;
+    top: 20px;
+    background: rgba(8, 12, 19, 0.65);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 22px;
+  }
+}
+
+/* Mobile Small Devices (<= 480px) */
 @media (max-width: 480px) {
   .screen {
     padding: 16px 14px;
   }
+
   .app-title {
     font-size: 28px;
   }
+
   .split-columns {
     grid-template-columns: 1fr;
   }
+
   .btn-card {
     padding: 14px 14px;
+  }
+
+  .demo-canvas-wrapper {
+    max-width: 280px;
+    height: 280px;
   }
 }
